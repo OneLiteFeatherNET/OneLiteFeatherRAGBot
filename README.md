@@ -22,6 +22,7 @@ Code Structure
   - `rag_service.py` – vector store, index, query/index API
   - `providers/` – `OpenAIProvider`, `OllamaProvider` implementing `AIProvider`
   - `types.py` – shared dataclasses (e.g., `Db`)
+  - `ingestion/` – pluggable sources (filesystem, GitHub repo/org) with checksum skipping
 - `src/rag_cli/` – CLI for indexing (`rag-index`)
   - supports `--config` YAML with multiple sources
   - example schema:
@@ -66,6 +67,11 @@ Quickstart (Docker Compose)
    - Docker: `docker compose run --rm bot rag-index /data/repos/my-repo https://github.com/ORG/my-repo`
    - Config: `uv run rag-index --config ingest.yaml`
 4. Use `/ask <question>` in Discord. The bot queries pgvector directly.
+
+Checksum‑based reindexing
+- The indexer stores per‑document checksums in a small Postgres table (`rag_checksums`).
+- On re‑index, unchanged documents are skipped automatically.
+- Document identity uses a stable `doc_id` (e.g., `<repo_url>@<relative_path>` for filesystem/Git repos).
 
 Local Development (no Docker)
 - Install dependencies, set env variables, then:

@@ -5,12 +5,14 @@ from pathlib import Path
 from typing import Iterable
 
 from llama_index.core import StorageContext, VectorStoreIndex
-from llama_index.core import SimpleDirectoryReader
 from llama_index.core.schema import Document
 from llama_index.vector_stores.postgres import PGVectorStore
 
 from .types import Db
 from .providers.base import AIProvider
+from .checksums import ChecksumStore, ChecksumRecord
+from .ingestion.filesystem import FilesystemSource
+from .ingestion.base import IngestItem
 
 
 @dataclass(frozen=True)
@@ -70,6 +72,7 @@ class RAGService:
             storage_context=self._storage_context,
         )
         self._qe = self._index.as_query_engine(similarity_top_k=self.rag_config.top_k)
+        self._checksums = ChecksumStore(db=vs_config.db)
 
     def query(self, question: str) -> RagResult:
         response = self._qe.query(question)
@@ -81,40 +84,32 @@ class RAGService:
         repo_url: str,
         required_exts: Iterable[str] | None = None,
     ) -> None:
-        exts = list(required_exts) if required_exts is not None else list(DEFAULT_EXTS)
+        source = FilesystemSource(repo_root=repo_root, repo_url=repo_url, exts=list(required_exts) if required_exts else None)
+        self.index_items(source.stream())
 
-        def meta_fn(filename: str):
-            rel = str(Path(filename).relative_to(repo_root))
-            return {
-                "repo": repo_url,
-                "file_path": rel,
-                "source_url": f"{repo_url}/blob/main/{rel}",
-            }
+    def index_items(self, items: Iterable[IngestItem]) -> None:
+        """Index items with checksum skipping using a checksum store."""
+        existing = self._checksums.load_map()
 
-        docs = SimpleDirectoryReader(
-            input_dir=str(repo_root),
-            recursive=True,
-            required_exts=exts,
-            file_metadata=meta_fn,
-            filename_as_id=True,
-        ).load_data()
+        to_index: list[Document] = []
+        updates: list[ChecksumRecord] = []
+        for item in items:
+            if existing.get(item.doc_id) == item.checksum:
+                continue
+            md = dict(item.metadata)
+            md["checksum"] = item.checksum
+            to_index.append(Document(text=item.text, metadata=md, id_=item.doc_id))
+            updates.append(ChecksumRecord(doc_id=item.doc_id, checksum=item.checksum))
 
-        VectorStoreIndex.from_documents(
-            docs,
-            storage_context=self._storage_context,
-            show_progress=True,
-        )
-
-    def index_items(self, items: Iterable[tuple[str, dict]]) -> None:
-        """Index an iterable of (text, metadata) tuples into the vector store."""
-        docs = [Document(text=t, metadata=m) for (t, m) in items]
-        if not docs:
+        if not to_index:
             return
+
         VectorStoreIndex.from_documents(
-            docs,
+            to_index,
             storage_context=self._storage_context,
             show_progress=True,
         )
+        self._checksums.upsert_many(updates)
 
     @staticmethod
     def _extract_sources(response) -> list[str]:

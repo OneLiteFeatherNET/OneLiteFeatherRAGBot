@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, Iterator, List
+from typing import Iterable, List
+import hashlib
 
-from .base import IngestionSource, Item
+from .base import IngestionSource, IngestItem
 
 
 DEFAULT_EXTS = [
@@ -24,7 +25,7 @@ class FilesystemSource(IngestionSource):
     repo_url: str
     exts: List[str] | None = None
 
-    def stream(self) -> Iterable[Item]:
+    def stream(self) -> Iterable[IngestItem]:
         exts = self.exts or DEFAULT_EXTS
         for p in self.repo_root.rglob("*"):
             if not p.is_file():
@@ -41,5 +42,6 @@ class FilesystemSource(IngestionSource):
                 "file_path": rel,
                 "source_url": f"{self.repo_url}/blob/main/{rel}",
             }
-            yield (text, meta)
-
+            doc_id = f"{self.repo_url}@{rel}"
+            checksum = hashlib.sha256(text.encode("utf-8", errors="ignore")).hexdigest()
+            yield IngestItem(doc_id=doc_id, text=text, metadata=meta, checksum=checksum)

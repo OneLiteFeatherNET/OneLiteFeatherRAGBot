@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, Iterator, List, Optional
+from typing import Iterable, List, Optional
 import os
 import tempfile
 import subprocess
 import requests
 
-from .base import IngestionSource, Item
+from .base import IngestionSource, IngestItem
 from .filesystem import FilesystemSource, DEFAULT_EXTS
 
 
@@ -20,7 +20,7 @@ class GitRepoSource(IngestionSource):
     token: Optional[str] = None
     workdir: Optional[Path] = None
 
-    def stream(self) -> Iterable[Item]:
+    def stream(self) -> Iterable[IngestItem]:
         tmpdir_ctx = tempfile.TemporaryDirectory() if self.workdir is None else None
         root = self.workdir or Path(tmpdir_ctx.name)  # type: ignore[union-attr]
         repo_name = self.repo_url.rstrip("/").split("/")[-1].replace(".git", "")
@@ -62,7 +62,7 @@ class GitHubOrgSource(IngestionSource):
     branch: Optional[str] = None
     token: Optional[str] = None
 
-    def stream(self) -> Iterable[Item]:
+    def stream(self) -> Iterable[IngestItem]:
         for repo_url in self._list_repo_urls():
             yield from GitRepoSource(
                 repo_url=repo_url,
@@ -96,4 +96,3 @@ class GitHubOrgSource(IngestionSource):
                     urls.append(clone_url)
             page += 1
         return urls
-
