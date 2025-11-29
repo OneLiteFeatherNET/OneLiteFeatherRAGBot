@@ -23,6 +23,33 @@ Code Structure
   - `providers/` – `OpenAIProvider`, `OllamaProvider` implementing `AIProvider`
   - `types.py` – shared dataclasses (e.g., `Db`)
 - `src/rag_cli/` – CLI for indexing (`rag-index`)
+  - supports `--config` YAML with multiple sources
+  - example schema:
+    ```yaml
+    sources:
+      - type: local_dir
+        path: /data/repos/my-repo
+        repo_url: https://github.com/ORG/my-repo
+        exts: [".md", ".py"]
+      - type: github_repo
+        repo: https://github.com/ORG/another-repo
+        branch: main
+        exts: [".md", ".py"]
+      - type: github_org
+        org: my-org
+        visibility: public   # all|public|private (token required for private)
+        include_archived: false
+        topics: []
+        exts: [".md", ".py"]
+        branch: main
+        token: ${GITHUB_TOKEN}
+    ```
+- `src/rag_core/ingestion/` – pluggable ingestion sources
+  - `base.py` – `IngestionSource` interface
+  - `filesystem.py` – local directory source
+  - `github.py` – GitHub repo/org sources (clone via git, list via API)
+  - `composite.py` – combine multiple sources
+  
 
 Environment (APP_ prefix)
 - Bot: `APP_DISCORD_TOKEN`
@@ -34,15 +61,17 @@ Environment (APP_ prefix)
 Quickstart (Docker Compose)
 1. Copy `.env.example` to `.env` and set required values.
 2. Start: `docker compose up --build`
-3. Index a repository (choose one):
+3. Index repositories/content (choose one):
    - Host: `uv run rag-index /path/to/repo https://github.com/ORG/repo`
    - Docker: `docker compose run --rm bot rag-index /data/repos/my-repo https://github.com/ORG/my-repo`
+   - Config: `uv run rag-index --config ingest.yaml`
 4. Use `/ask <question>` in Discord. The bot queries pgvector directly.
 
 Local Development (no Docker)
 - Install dependencies, set env variables, then:
   - Bot: `uv run discord-rag-bot`
   - Indexing: `uv run rag-index /path/to/repo https://github.com/ORG/repo`
+  - Multi-source indexing: `uv run rag-index --config ingest.yaml`
 
 Ollama (optional)
 - Compose starts `ollama` on port 11434.

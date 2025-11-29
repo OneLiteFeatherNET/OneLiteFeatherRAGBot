@@ -6,6 +6,7 @@ from typing import Iterable
 
 from llama_index.core import StorageContext, VectorStoreIndex
 from llama_index.core import SimpleDirectoryReader
+from llama_index.core.schema import Document
 from llama_index.vector_stores.postgres import PGVectorStore
 
 from .types import Db
@@ -98,6 +99,17 @@ class RAGService:
             filename_as_id=True,
         ).load_data()
 
+        VectorStoreIndex.from_documents(
+            docs,
+            storage_context=self._storage_context,
+            show_progress=True,
+        )
+
+    def index_items(self, items: Iterable[tuple[str, dict]]) -> None:
+        """Index an iterable of (text, metadata) tuples into the vector store."""
+        docs = [Document(text=t, metadata=m) for (t, m) in items]
+        if not docs:
+            return
         VectorStoreIndex.from_documents(
             docs,
             storage_context=self._storage_context,
