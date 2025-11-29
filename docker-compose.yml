@@ -1,0 +1,36 @@
+version: "3.9"
+
+services:
+  db:
+    image: ankane/pgvector:latest
+    environment:
+      POSTGRES_USER: ${APP_PG_USER}
+      POSTGRES_PASSWORD: ${APP_PG_PASSWORD}
+      POSTGRES_DB: ${APP_PG_DATABASE}
+    ports:
+      - "5432:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile.discord-bot
+    env_file: .env
+    depends_on:
+      - db
+    volumes:
+      - ./data:/data
+
+  # Optional: local LLM via Ollama for offline testing
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    restart: unless-stopped
+
+volumes:
+  db-data:
+  ollama-data:
