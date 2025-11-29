@@ -13,8 +13,8 @@ class AskCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
-    @app_commands.command(name="ask", description="Frage zum Code/Docs der Org (RAG via pgvector).")
-    @app_commands.describe(question="Deine Frage")
+    @app_commands.command(name="ask", description="Ask about the org's code/docs (RAG via pgvector).")
+    @app_commands.describe(question="Your question")
     async def ask(self, interaction: discord.Interaction, question: str):
         await interaction.response.defer(thinking=True)
 
@@ -24,7 +24,7 @@ class AskCog(commands.Cog):
         result = await asyncio.to_thread(run_query)
         text = result.answer
         if result.sources:
-            text += "\n\nQuellen:\n" + "\n".join(f"- {s}" for s in result.sources)
+            text += "\n\nSources:\n" + "\n".join(f"- {s}" for s in result.sources)
 
         await interaction.followup.send(clip_discord_message(text))
 
