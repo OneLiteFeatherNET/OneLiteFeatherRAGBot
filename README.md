@@ -136,6 +136,10 @@ Message-based Q&A (mention/reply)
  - When replying to the bot, any text you add is treated as your question and the replied bot message is included as context automatically.
  - Prefix commands are disabled intentionally; only slash commands and mentions/replies are supported.
 
+Memory commands
+- `/memory show [scope: channel|all] [user] [limit] [ephemeral]` – zeigt gespeichertes Gedächtnis (Zusammenfassung + letzte Schritte). Ohne `user` wird dein eigenes angezeigt. Andere Nutzer nur für Admins.
+- `/memory clear [scope: channel|all] [user] [confirm] [ephemeral]` – löscht Gedächtnis. Ohne `user` löscht du dein eigenes. Andere Nutzer nur für Admins. `confirm:true` erforderlich.
+
 License
 MIT — see `LICENSE`.
   - `run_queue.py` – queue worker (`rag-run-queue`) that processes jobs created from Discord
