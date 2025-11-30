@@ -90,28 +90,28 @@ class JobStore:
     def fetch_and_start(self) -> Optional[Job]:
         async def _run() -> Optional[Job]:
             conn = await asyncpg.connect(self._dsn())
-        try:
-            await self._ensure_table_async(conn)
-            async with conn.transaction():
-                row = await conn.fetchrow(
-                    f"""
-                        WITH j AS (
-                            SELECT id FROM {self.table}
-                            WHERE status='pending'
-                            ORDER BY id
-                            LIMIT 1
-                            FOR UPDATE SKIP LOCKED
-                        )
-                        UPDATE {self.table} t
-                        SET status='processing', started_at=NOW(), attempts = attempts + 1
-                        FROM j
-                        WHERE t.id = j.id
-                        RETURNING t.id, t.type, t.payload, t.status, t.attempts, t.error, t.created_at, t.started_at, t.finished_at, t.progress_done, t.progress_total, t.progress_note
-                        """
-                )
-                if not row:
-                    return None
-                payload = row["payload"]
+            try:
+                await self._ensure_table_async(conn)
+                async with conn.transaction():
+                    row = await conn.fetchrow(
+                        f"""
+                            WITH j AS (
+                                SELECT id FROM {self.table}
+                                WHERE status='pending'
+                                ORDER BY id
+                                LIMIT 1
+                                FOR UPDATE SKIP LOCKED
+                            )
+                            UPDATE {self.table} t
+                            SET status='processing', started_at=NOW(), attempts = attempts + 1
+                            FROM j
+                            WHERE t.id = j.id
+                            RETURNING t.id, t.type, t.payload, t.status, t.attempts, t.error, t.created_at, t.started_at, t.finished_at, t.progress_done, t.progress_total, t.progress_note
+                            """
+                    )
+                    if not row:
+                        return None
+                    payload = row["payload"]
                     if isinstance(payload, str):
                         try:
                             payload = json.loads(payload)
@@ -261,13 +261,16 @@ class JobStore:
             fields = []
             values = []
             if done is not None:
-                fields.append("progress_done=$1")
+                idx = len(values) + 1
+                fields.append(f"progress_done=${idx}")
                 values.append(done)
             if total is not None:
-                fields.append(f"progress_total=${len(values)+1}")
+                idx = len(values) + 1
+                fields.append(f"progress_total=${idx}")
                 values.append(total)
             if note is not None:
-                fields.append(f"progress_note=${len(values)+1}")
+                idx = len(values) + 1
+                fields.append(f"progress_note=${idx}")
                 values.append(note)
             if not fields:
                 return
