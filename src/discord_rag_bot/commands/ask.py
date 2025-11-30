@@ -28,14 +28,8 @@ class AskCog(commands.Cog):
 
         await interaction.followup.send(clip_discord_message(text))
 
-    async def cog_load(self) -> None:  # type: ignore[override]
-        self.bot.tree.add_command(self.ask)
-
-    async def cog_unload(self) -> None:  # type: ignore[override]
-        try:
-            self.bot.tree.remove_command(self.ask.name, type=self.ask.type)
-        except Exception:
-            pass
+    # App commands defined in Cogs are automatically registered by discord.py
+    # during cog injection; no manual add/remove needed here.
 
 
 async def setup(bot: commands.Bot):
