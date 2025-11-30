@@ -23,6 +23,7 @@ class VLLMProvider(AIProvider):
             temperature=self.config.temperature,
             base_url=self.base_url,
             api_key=self.api_key or "EMPTY",
+            system_prompt=self.config.system_prompt,
         )
 
         # Embeddings backend can be chosen via config.embed_backend
@@ -47,3 +48,12 @@ class VLLMProvider(AIProvider):
             from llama_index.embeddings.openai import OpenAIEmbedding
 
             Settings.embed_model = OpenAIEmbedding(model=self.config.embedding_model)
+
+    def create_llm(self, *, system_prompt: str | None = None):
+        return OpenAI(
+            model=self.config.llm_model,
+            temperature=self.config.temperature,
+            base_url=self.base_url,
+            api_key=self.api_key or "EMPTY",
+            system_prompt=system_prompt if system_prompt is not None else self.config.system_prompt,
+        )

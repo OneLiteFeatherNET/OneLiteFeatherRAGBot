@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Optional
+import threading
+from llama_index.core import Settings
 import logging
 
 from llama_index.core import StorageContext, VectorStoreIndex
@@ -63,6 +65,8 @@ class RAGService:
         self.ai_provider = ai_provider
         if self.ai_provider is not None:
             self.ai_provider.configure_global()
+        self._default_llm = Settings.llm
+        self._llm_lock = threading.Lock()
 
         self._vector_store = PGVectorStore.from_params(
             database=vs_config.db.database,
@@ -85,17 +89,16 @@ class RAGService:
         # Verify existing table embedding dimension if table exists
         self._verify_embed_dim()
 
-    def query(self, question: str) -> RagResult:
+    def query(self, question: str, *, system_prompt: str | None = None) -> RagResult:
         # When no vectors exist and fallback enabled → plain LLM
         if self._row_count is None:
             self._row_count = self._get_row_count()
         if not self._row_count and self.rag_config.fallback_to_llm:
-            from llama_index.core import Settings
-
-            llm_resp = Settings.llm.complete(question)
+            llm = self._select_llm(system_prompt)
+            llm_resp = llm.complete(question)
             return RagResult(answer=str(llm_resp), sources=[])
 
-        response = self._qe.query(question)
+        response = self._run_query_with_prompt(question, system_prompt)
         sources = self._extract_sources(response)
         text = str(response)
 
@@ -116,9 +119,8 @@ class RAGService:
                     should_mix = best > float(self.rag_config.mix_threshold)
 
         if should_mix:
-            from llama_index.core import Settings
-
-            llm_resp = Settings.llm.complete(question)
+            llm = self._select_llm(system_prompt)
+            llm_resp = llm.complete(question)
             text = f"{text}\n\n— General answer —\n{str(llm_resp)}"
 
         return RagResult(answer=text, sources=sources)
@@ -299,6 +301,27 @@ class RAGService:
                 return int(conn.execute(cnt_sql).scalar() or 0)
         except Exception:
             return 0
+
+    def _select_llm(self, system_prompt: str | None):
+        if system_prompt and self.ai_provider is not None:
+            try:
+                return self.ai_provider.create_llm(system_prompt=system_prompt)
+            except Exception:
+                return self._default_llm
+        return self._default_llm
+
+    def _run_query_with_prompt(self, question: str, system_prompt: str | None):
+        if not system_prompt or self.ai_provider is None:
+            return self._qe.query(question)
+        llm = self._select_llm(system_prompt)
+        # Temporarily swap global llm in a lock to avoid races
+        with self._llm_lock:
+            prev = Settings.llm
+            Settings.llm = llm
+            try:
+                return self._qe.query(question)
+            finally:
+                Settings.llm = prev
 
     def _best_score(self, response) -> Optional[float]:
         try:

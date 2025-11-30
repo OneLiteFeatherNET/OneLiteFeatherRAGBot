@@ -8,6 +8,7 @@ from discord.ext import commands
 
 from ..util.text import clip_discord_message
 from rag_core import RagResult
+from ..infrastructure/config_store import load_prompt_effective
 
 
 class ChatListenerCog(commands.Cog):
@@ -73,7 +74,8 @@ class ChatListenerCog(commands.Cog):
             return
 
         def run_query() -> RagResult:
-            return self.bot.services.rag.query(question)  # type: ignore[attr-defined]
+            prompt = load_prompt_effective(message.guild.id if message.guild else None, message.channel.id)
+            return self.bot.services.rag.query(question, system_prompt=prompt)  # type: ignore[attr-defined]
 
         async with message.channel.typing():
             result = await asyncio.to_thread(run_query)

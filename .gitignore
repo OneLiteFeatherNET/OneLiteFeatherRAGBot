@@ -13,3 +13,6 @@ wheels/
 .env
 .env.*
 !.env.example
+
+# Local ETL/Prompt staging (manifests, prompts, etc.)
+.staging/

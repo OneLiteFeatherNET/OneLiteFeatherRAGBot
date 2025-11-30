@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     embed_model: str = "text-embedding-3-small"
     temperature: float = 0.1
     embed_provider: str = "openai"  # openai|ollama
+    llm_system_prompt: str | None = None
     # Bot branding / guilds
     bot_status: str | None = "OneLiteFeather RAG"
     guild_ids: list[int] = []  # optional, for guild-specific command sync

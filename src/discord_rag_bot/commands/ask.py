@@ -7,6 +7,7 @@ from discord.ext import commands
 
 from rag_core import RagResult
 from ..util.text import clip_discord_message
+from ..infrastructure.config_store import load_prompt_effective
 
 
 class AskCog(commands.Cog):
@@ -19,7 +20,8 @@ class AskCog(commands.Cog):
         await interaction.response.defer(thinking=True)
 
         def run_query() -> RagResult:
-            return self.bot.services.rag.query(question)  # type: ignore[attr-defined]
+            prompt = load_prompt_effective(interaction.guild_id, interaction.channel_id)
+            return self.bot.services.rag.query(question, system_prompt=prompt)  # type: ignore[attr-defined]
 
         result = await asyncio.to_thread(run_query)
         text = result.answer
