@@ -117,7 +117,7 @@ class GitHubIssuesSource(IngestionSource):
         parts = self.repo_url.rstrip("/").split("/")
         owner, repo_name = parts[-2], parts[-1].removesuffix(".git")
         repo = gh.get_repo(f"{owner}/{repo_name}")
-        issues = repo.get_issues(state=self.state or "all", labels=self.labels or None)
+        issues = repo.get_issues(state=self.state or "all", labels=list(self.labels or []))
         for issue in issues:
             try:
                 if getattr(issue, "pull_request", None):
