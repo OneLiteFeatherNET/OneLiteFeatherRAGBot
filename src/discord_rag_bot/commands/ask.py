@@ -18,6 +18,12 @@ class AskCog(commands.Cog):
     @app_commands.describe(question="Your question")
     async def ask(self, interaction: discord.Interaction, question: str):
         await interaction.response.defer(thinking=True)
+        # Show a friendly placeholder immediately, then edit when finished
+        placeholder = "🧠 Einen kleinen Moment – ich suche passende Informationen und schreibe die Antwort …"
+        try:
+            await interaction.edit_original_response(content=placeholder)
+        except Exception:
+            pass
 
         def run_query() -> RagResult:
             prompt = load_prompt_effective(interaction.guild_id, interaction.channel_id)
@@ -28,7 +34,7 @@ class AskCog(commands.Cog):
         if result.sources:
             text += "\n\nSources:\n" + "\n".join(f"- {s}" for s in result.sources)
 
-        await interaction.followup.send(clip_discord_message(text))
+        await interaction.edit_original_response(content=clip_discord_message(text))
 
     # App commands defined in Cogs are automatically registered by discord.py
     # during cog injection; no manual add/remove needed here.

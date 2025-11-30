@@ -77,14 +77,19 @@ class ChatListenerCog(commands.Cog):
             prompt = load_prompt_effective(message.guild.id if message.guild else None, message.channel.id)
             return self.bot.services.rag.query(question, system_prompt=prompt)  # type: ignore[attr-defined]
 
-        async with message.channel.typing():
-            result = await asyncio.to_thread(run_query)
+        # Send friendly placeholder reply and then edit when ready
+        placeholder_msg = await message.reply("🧠 Einen kleinen Moment – ich suche passende Informationen und schreibe die Antwort …")
+        result = await asyncio.to_thread(run_query)
 
         text = result.answer
         if result.sources:
             text += "\n\nSources:\n" + "\n".join(f"- {s}" for s in result.sources)
 
-        await message.reply(clip_discord_message(text))
+        try:
+            await placeholder_msg.edit(content=clip_discord_message(text))
+        except Exception:
+            # Fallback: send a fresh reply if edit fails
+            await message.reply(clip_discord_message(text))
 
 
 async def setup(bot: commands.Bot):
