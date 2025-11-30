@@ -14,6 +14,7 @@ from ..infrastructure.config_store import (
 )
 from ..infrastructure.ai import build_ai_provider
 from ..infrastructure.config_store import migrate_prompts_files_to_db
+from ..infrastructure.permissions import require_admin
 
 
 class ConfigCog(commands.Cog):
@@ -22,16 +23,8 @@ class ConfigCog(commands.Cog):
 
     group = app_commands.Group(name="config", description="Configure bot behavior (admin)")
 
-    @staticmethod
-    def admin_check():
-        async def predicate(interaction: discord.Interaction) -> bool:
-            if isinstance(interaction.user, discord.Member):
-                return interaction.user.guild_permissions.administrator
-            return False
-        return app_commands.check(predicate)
-
     @group.command(name="system_prompt_get", description="Get current system prompt")
-    @admin_check.__func__()
+    @require_admin()
     async def system_prompt_get(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
         p = load_system_prompt()
@@ -41,7 +34,7 @@ class ConfigCog(commands.Cog):
             await interaction.followup.send(f"Current system prompt:\n```\n{p}\n```", ephemeral=True)
 
     @group.command(name="system_prompt_set", description="Set system prompt for LLM")
-    @admin_check.__func__()
+    @require_admin()
     @app_commands.describe(text="New system prompt text", scope="Scope: global|guild|channel")
     async def system_prompt_set(self, interaction: discord.Interaction, text: str, scope: str = "global"):
         await interaction.response.defer(ephemeral=True)
@@ -65,7 +58,7 @@ class ConfigCog(commands.Cog):
         await interaction.followup.send(f"System prompt updated for scope '{scope}' and LLM reconfigured.", ephemeral=True)
 
     @group.command(name="system_prompt_clear", description="Clear system prompt")
-    @admin_check.__func__()
+    @require_admin()
     @app_commands.describe(scope="Scope: global|guild|channel")
     async def system_prompt_clear(self, interaction: discord.Interaction, scope: str = "global"):
         await interaction.response.defer(ephemeral=True)
@@ -88,7 +81,7 @@ class ConfigCog(commands.Cog):
         await interaction.followup.send(f"System prompt cleared for scope '{scope}'.", ephemeral=True)
 
     @group.command(name="system_prompt_effective", description="Show effective system prompt for this channel")
-    @admin_check.__func__()
+    @require_admin()
     async def system_prompt_effective(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
         text = load_prompt_effective(interaction.guild_id, interaction.channel_id)
@@ -98,7 +91,7 @@ class ConfigCog(commands.Cog):
             await interaction.followup.send(f"Effective prompt for this channel:\n```\n{text}\n```", ephemeral=True)
 
     @group.command(name="migrate_prompts_to_db", description="Migrate .staging prompts into DB settings (admin)")
-    @admin_check.__func__()
+    @require_admin()
     @app_commands.describe(delete_files="Delete files after successful migration")
     async def migrate_prompts_to_db(self, interaction: discord.Interaction, delete_files: bool = True):
         await interaction.response.defer(ephemeral=True)

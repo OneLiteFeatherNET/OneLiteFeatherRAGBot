@@ -11,6 +11,7 @@ from pathlib import Path
 
 from ..config import settings
 from ..util.text import clip_discord_message
+from ..infrastructure.permissions import require_admin
 from rag_core.ingestion.github import GitRepoSource, GitHubOrgSource
 from rag_core.ingestion.github import GitHubIssuesSource
 from rag_core.ingestion.filesystem import FilesystemSource
@@ -68,7 +69,7 @@ class EstimateCog(commands.Cog):
 
     # GitHub repo
     @group.command(name="github_repo", description="Schätzt die Dauer für ein GitHub-Repository")
-    @admin_check.__func__()
+    @require_admin()
     @app_commands.describe(repo="GitHub repo URL", branch="Optionaler Branch", exts="Kommagetrennte Endungen", chunk_size="Chunkgröße", chunk_overlap="Overlap")
     async def estimate_github_repo(self, interaction: discord.Interaction, repo: str, branch: Optional[str] = None, exts: Optional[str] = None, chunk_size: Optional[int] = None, chunk_overlap: Optional[int] = 200):
         await interaction.response.defer(ephemeral=True)
@@ -81,7 +82,7 @@ class EstimateCog(commands.Cog):
 
     # Local dir
     @group.command(name="local_dir", description="Schätzt die Dauer für ein lokales Verzeichnis")
-    @admin_check.__func__()
+    @require_admin()
     @app_commands.describe(repo_root="Lokaler Pfad", repo_url="Öffentliche URL", exts="Kommagetrennte Endungen", chunk_size="Chunkgröße", chunk_overlap="Overlap")
     async def estimate_local_dir(self, interaction: discord.Interaction, repo_root: str, repo_url: str, exts: Optional[str] = None, chunk_size: Optional[int] = None, chunk_overlap: Optional[int] = 200):
         await interaction.response.defer(ephemeral=True)
@@ -94,7 +95,7 @@ class EstimateCog(commands.Cog):
 
     # GitHub Issues
     @group.command(name="github_issues", description="Schätzt die Dauer für GitHub-Issues eines Repos")
-    @admin_check.__func__()
+    @require_admin()
     @app_commands.describe(repo="GitHub repo URL", state="all|open|closed", labels="Labels", include_comments="Kommentare einbeziehen", chunk_size="Chunkgröße", chunk_overlap="Overlap")
     async def estimate_github_issues(self, interaction: discord.Interaction, repo: str, state: str = "all", labels: Optional[str] = None, include_comments: bool = True, chunk_size: Optional[int] = None, chunk_overlap: Optional[int] = 200):
         await interaction.response.defer(ephemeral=True)
@@ -106,7 +107,7 @@ class EstimateCog(commands.Cog):
 
     # Web URLs
     @group.command(name="web_url", description="Schätzt die Dauer für konkrete URLs")
-    @admin_check.__func__()
+    @require_admin()
     @app_commands.describe(urls="Kommagetrennte Liste von URLs", chunk_size="Chunkgröße", chunk_overlap="Overlap")
     async def estimate_web_url(self, interaction: discord.Interaction, urls: str, chunk_size: Optional[int] = None, chunk_overlap: Optional[int] = 200):
         await interaction.response.defer(ephemeral=True)
@@ -119,7 +120,7 @@ class EstimateCog(commands.Cog):
 
     # Website crawler
     @group.command(name="website", description="Schätzt die Dauer für eine Website-Crawl")
-    @admin_check.__func__()
+    @require_admin()
     @app_commands.describe(start_url="Start-URL", allowed_prefixes="Kommagetrennte Präfixe", max_pages="Max Seiten", chunk_size="Chunkgröße", chunk_overlap="Overlap")
     async def estimate_website(self, interaction: discord.Interaction, start_url: str, allowed_prefixes: str = "", max_pages: int = 200, chunk_size: Optional[int] = None, chunk_overlap: Optional[int] = 200):
         await interaction.response.defer(ephemeral=True)

@@ -10,6 +10,7 @@ from rag_core.orm.session import create_engine_from_db
 
 from ..config import settings
 from ..util.text import clip_discord_message
+from ..infrastructure.permissions import require_admin
 
 
 class StatsCog(commands.Cog):
@@ -18,16 +19,8 @@ class StatsCog(commands.Cog):
 
     stats = app_commands.Group(name="stats", description="Administrative statistics")
 
-    @staticmethod
-    def admin_check():
-        async def predicate(interaction: discord.Interaction) -> bool:
-            if isinstance(interaction.user, discord.Member):
-                return interaction.user.guild_permissions.administrator
-            return False
-        return app_commands.check(predicate)
-
     @stats.command(name="rag_size", description="Zeigt Umfang des Wissens (Chunks, Dokumente, Größe) aus der Datenbank")
-    @admin_check.__func__()
+    @require_admin()
     async def rag_size(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
 

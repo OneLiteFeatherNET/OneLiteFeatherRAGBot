@@ -8,6 +8,7 @@ from discord.ext import commands
 import json
 from ..util.text import clip_discord_message
 from ..config import settings
+from ..infrastructure.permissions import require_admin
 from rag_core.ingestion.web import UrlSource, WebsiteCrawlerSource
 from rag_core.ingestion.web import SitemapSource
 from rag_core.ingestion.github import GitRepoSource, GitHubOrgSource, GitHubIssuesSource
@@ -83,7 +84,7 @@ class IndexQueueCog(commands.Cog):
         return app_commands.check(predicate)
 
     @github.command(name="repo", description="Queue a GitHub repository for indexing")
-    @admin_check.__func__()
+    @require_admin()
     @app_commands.describe(
         repo="GitHub repo URL (e.g., https://github.com/ORG/REPO)",
         branch="Optional branch (default: default branch)",
@@ -120,7 +121,7 @@ class IndexQueueCog(commands.Cog):
         self.bot.loop.create_task(self._watch_job(msg, job_id))
 
     @github.command(name="issues", description="Queue GitHub Issues eines Repos für das RAG")
-    @admin_check.__func__()
+    @require_admin()
     @app_commands.describe(
         repo="GitHub repo URL (z. B. https://github.com/ORG/REPO)",
         state="Filter: all|open|closed (default: all)",
@@ -154,7 +155,7 @@ class IndexQueueCog(commands.Cog):
         self.bot.loop.create_task(self._watch_job(msg, job_id))
 
     @github.command(name="org", description="Queue all repos in a GitHub org for indexing")
-    @admin_check.__func__()
+    @require_admin()
     @app_commands.describe(
         org="GitHub organization name",
         visibility="Visibility filter (all|public|private)",
@@ -197,7 +198,7 @@ class IndexQueueCog(commands.Cog):
         self.bot.loop.create_task(self._watch_job(msg, job_id))
 
     @local.command(name="dir", description="Queue a local directory for indexing")
-    @admin_check.__func__()
+    @require_admin()
     @app_commands.describe(
         repo_root="Local path to repository root on the indexer host",
         repo_url="Public URL used for source links",
@@ -234,7 +235,7 @@ class IndexQueueCog(commands.Cog):
         self.bot.loop.create_task(self._watch_job(msg, job_id))
 
     @queue.command(name="list", description="List recent indexing jobs")
-    @admin_check.__func__()
+    @require_admin()
     @app_commands.describe(status="Optional status filter (pending|processing|completed|failed)", limit="Max number of jobs to list (default 20)")
     async def list_jobs(self, interaction: discord.Interaction, status: Optional[str] = None, limit: int = 20):
         await interaction.response.defer(ephemeral=True)
@@ -249,7 +250,7 @@ class IndexQueueCog(commands.Cog):
         await interaction.followup.send(clip_discord_message("Jobs:\n" + "\n".join(lines)), ephemeral=True)
 
     @queue.command(name="show", description="Show details of a job")
-    @admin_check.__func__()
+    @require_admin()
     @app_commands.describe(job_id="Job ID")
     async def show_job(self, interaction: discord.Interaction, job_id: int):
         await interaction.response.defer(ephemeral=True)
@@ -271,7 +272,7 @@ class IndexQueueCog(commands.Cog):
         await interaction.followup.send(clip_discord_message(text), ephemeral=True)
 
     @web.command(name="url", description="Queue specific URLs for indexing")
-    @admin_check.__func__()
+    @require_admin()
     @app_commands.describe(urls="Comma-separated list of URLs")
     async def web_url(self, interaction: discord.Interaction, urls: str):
         await interaction.response.defer(ephemeral=True)
@@ -292,7 +293,7 @@ class IndexQueueCog(commands.Cog):
         self.bot.loop.create_task(self._watch_job(msg, job_id))
 
     @web.command(name="website", description="Queue a website crawl for indexing")
-    @admin_check.__func__()
+    @require_admin()
     @app_commands.describe(start_url="Start URL", allowed_prefixes="Comma-separated URL prefixes", max_pages="Max pages to crawl (default 200)")
     async def web_site(self, interaction: discord.Interaction, start_url: str, allowed_prefixes: str = "", max_pages: int = 200):
         await interaction.response.defer(ephemeral=True)
@@ -313,7 +314,7 @@ class IndexQueueCog(commands.Cog):
         self.bot.loop.create_task(self._watch_job(msg, job_id))
 
     @web.command(name="sitemap", description="Queue a sitemap for indexing")
-    @admin_check.__func__()
+    @require_admin()
     @app_commands.describe(sitemap_url="Sitemap URL (XML)", limit="Optional limit of URLs to fetch")
     async def web_sitemap(self, interaction: discord.Interaction, sitemap_url: str, limit: Optional[int] = None):
         await interaction.response.defer(ephemeral=True)
@@ -330,7 +331,7 @@ class IndexQueueCog(commands.Cog):
 
     # Checksum-only jobs (ETL manifest built, then queued as checksum_update)
     @checksum.command(name="github_repo", description="Queue checksum-only update for a GitHub repository")
-    @admin_check.__func__()
+    @require_admin()
     @app_commands.describe(repo="GitHub repo URL", branch="Optional branch", exts="Comma-separated extensions")
     async def checksum_github_repo(self, interaction: discord.Interaction, repo: str, branch: Optional[str] = None, exts: Optional[str] = None):
         await interaction.response.defer(ephemeral=True)
@@ -351,7 +352,7 @@ class IndexQueueCog(commands.Cog):
         self.bot.loop.create_task(self._watch_job(msg, job_id))
 
     @checksum.command(name="github_issues", description="Checksum-Update nur für GitHub Issues eines Repos")
-    @admin_check.__func__()
+    @require_admin()
     @app_commands.describe(repo="GitHub repo URL", state="all|open|closed", labels="Labels", include_comments="Kommentare einbeziehen")
     async def checksum_github_issues(self, interaction: discord.Interaction, repo: str, state: str = "all", labels: Optional[str] = None, include_comments: bool = True):
         await interaction.response.defer(ephemeral=True)

@@ -11,6 +11,7 @@ from rag_core.orm.session import create_engine_from_db
 
 from ..config import settings
 from ..util.text import clip_discord_message
+from ..infrastructure.permissions import require_admin
 
 
 def _admin_check():
@@ -26,7 +27,7 @@ class HealthCog(commands.Cog):
         self.bot = bot
 
     @app_commands.command(name="health", description="Show bot/RAG health and configuration")
-    @_admin_check()
+    @require_admin()
     async def health(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
 
