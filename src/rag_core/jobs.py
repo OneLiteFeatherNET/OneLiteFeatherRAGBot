@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
 import asyncpg
+from asyncpg.types import Json
 
 from .types import Db
 
@@ -60,7 +61,7 @@ class JobStore:
             row = await conn.fetchrow(
                 f"INSERT INTO {self.table} (type, payload) VALUES ($1, $2) RETURNING id",
                 job_type,
-                payload,
+                Json(payload),
             )
             return int(row["id"])  # type: ignore[index]
         finally:
