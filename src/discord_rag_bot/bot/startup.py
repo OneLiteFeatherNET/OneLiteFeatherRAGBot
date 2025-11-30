@@ -17,6 +17,7 @@ from ..tools.queue_tools import (
     QueueSitemapTool,
     QueueGithubRepoTool,
     QueueLocalDirTool,
+    QueueGithubOrgTool,
 )
 
 
@@ -61,6 +62,7 @@ def build_services() -> BotServices:
     tools.register(QueueSitemapTool(enqueue_callable))
     tools.register(QueueGithubRepoTool(enqueue_callable))
     tools.register(QueueLocalDirTool(enqueue_callable))
+    tools.register(QueueGithubOrgTool(enqueue_callable))
     return BotServices(rag=rag, job_repo_factory=job_repo_factory, job_repo_default=default_job_repo, tools=tools, memory=memory)
 
 
