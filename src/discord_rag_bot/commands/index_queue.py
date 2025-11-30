@@ -9,6 +9,7 @@ import json
 from ..util.text import clip_discord_message
 from ..config import settings
 from rag_core.ingestion.web import UrlSource, WebsiteCrawlerSource
+from rag_core.ingestion.web import SitemapSource
 from rag_core.ingestion.github import GitRepoSource, GitHubOrgSource
 from rag_core.ingestion.filesystem import FilesystemSource
 from rag_core.ingestion.chunked import ChunkingSource
@@ -234,6 +235,22 @@ class IndexQueueCog(commands.Cog):
         await interaction.followup.send(f"Queued job #{job_id} to crawl {start_url}", ephemeral=True)
         self.bot.loop.create_task(self._watch_job(msg, job_id))
 
+    @web.command(name="sitemap", description="Queue a sitemap for indexing")
+    @admin_check.__func__()
+    @app_commands.describe(sitemap_url="Sitemap URL (XML)", limit="Optional limit of URLs to fetch")
+    async def web_sitemap(self, interaction: discord.Interaction, sitemap_url: str, limit: Optional[int] = None):
+        await interaction.response.defer(ephemeral=True)
+        await interaction.followup.send("Building manifest (sitemap)…", ephemeral=True)
+        source = SitemapSource(sitemap_url=sitemap_url, limit=limit)
+        manifest = await __import__("asyncio").to_thread(build_manifest, source)
+        store = LocalArtifactStore(root=Path(getattr(settings, "etl_staging_dir", ".staging")))
+        key = store.put_manifest(manifest)
+        payload = {"artifact_key": key}
+        job_id = await self.bot.services.job_repo.enqueue("ingest", payload)  # type: ignore[attr-defined]
+        msg = await interaction.channel.send(f"Job #{job_id}: queued (sitemap {sitemap_url}, manifest={key})")  # type: ignore[union-attr]
+        await interaction.followup.send(f"Queued job #{job_id} for sitemap {sitemap_url}", ephemeral=True)
+        self.bot.loop.create_task(self._watch_job(msg, job_id))
+
     # Checksum-only jobs (ETL manifest built, then queued as checksum_update)
     @checksum.command(name="github_repo", description="Queue checksum-only update for a GitHub repository")
     @admin_check.__func__()
@@ -303,6 +320,22 @@ class IndexQueueCog(commands.Cog):
         await interaction.followup.send(f"Queued checksum-update job #{job_id} to crawl {start_url}", ephemeral=True)
         self.bot.loop.create_task(self._watch_job(msg, job_id))
 
+    @checksum.command(name="sitemap", description="Queue checksum-only update for a sitemap")
+    @admin_check.__func__()
+    @app_commands.describe(sitemap_url="Sitemap URL (XML)", limit="Optional limit of URLs to fetch")
+    async def checksum_sitemap(self, interaction: discord.Interaction, sitemap_url: str, limit: Optional[int] = None):
+        await interaction.response.defer(ephemeral=True)
+        await interaction.followup.send("Building manifest (sitemap)…", ephemeral=True)
+        source = SitemapSource(sitemap_url=sitemap_url, limit=limit)
+        manifest = await __import__("asyncio").to_thread(build_manifest, source)
+        store = LocalArtifactStore(root=Path(getattr(settings, "etl_staging_dir", ".staging")))
+        key = store.put_manifest(manifest)
+        payload = {"artifact_key": key}
+        job_id = await self.bot.services.job_repo.enqueue("checksum_update", payload)  # type: ignore[attr-defined]
+        msg = await interaction.channel.send(f"Job #{job_id}: queued (checksum sitemap, manifest={key})")  # type: ignore[union-attr]
+        await interaction.followup.send(f"Queued checksum-update job #{job_id} for sitemap {sitemap_url}", ephemeral=True)
+        self.bot.loop.create_task(self._watch_job(msg, job_id))
+
     @queue.command(name="retry", description="Retry a failed or canceled job")
     @admin_check.__func__()
     @app_commands.describe(job_id="Job ID to retry")
@@ -327,4 +360,12 @@ class IndexQueueCog(commands.Cog):
 
 
 async def setup(bot: commands.Bot):
-    await bot.add_cog(IndexQueueCog(bot))
+    # Register the Cog and explicitly add the grouped slash-commands to the tree
+    cog = IndexQueueCog(bot)
+    await bot.add_cog(cog)
+    # Add top-level group; nested groups (github/local/web/checksum) are attached via parent=queue
+    try:
+        bot.tree.add_command(IndexQueueCog.queue)
+    except Exception:
+        # Ignore if already added (e.g., during hot-reload)
+        pass
