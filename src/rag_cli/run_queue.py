@@ -14,6 +14,7 @@ from rag_core.db.base import JobRepository
 from rag_core.logging import setup_logging
 from rag_core.ingestion.chunked import ChunkingSource
 from rag_core.etl.artifacts import LocalArtifactStore
+from rag_core.etl.artifacts_s3 import S3ArtifactStore, S3Unavailable
 from rag_core.etl.pipeline import items_from_manifest
 from rag_cli.config_loader import config_from_dict, composite_from_config
 
@@ -38,7 +39,24 @@ def process_one(job_repo: JobRepository, service: RAGService) -> bool:
         # If payload references a prebuilt manifest, load it
         manifest_key = job.payload.get("artifact_key")
         if manifest_key:
-            store = LocalArtifactStore(root=Path(getattr(settings, "etl_staging_dir", ".staging")))
+            # Select artifact store (local or S3)
+            backend = (getattr(settings, "etl_staging_backend", "local") or "local").lower()
+            if backend == "s3":
+                if not getattr(settings, "s3_staging_bucket", None):
+                    raise RuntimeError("S3 staging selected but APP_S3_STAGING_BUCKET not set")
+                try:
+                    store = S3ArtifactStore(
+                        bucket=settings.s3_staging_bucket,  # type: ignore[arg-type]
+                        prefix=getattr(settings, "s3_staging_prefix", "rag-artifacts"),
+                        region=getattr(settings, "s3_region", None),
+                        endpoint_url=getattr(settings, "s3_endpoint_url", None),
+                        access_key_id=getattr(settings, "s3_access_key_id", None),
+                        secret_access_key=getattr(settings, "s3_secret_access_key", None),
+                    )
+                except S3Unavailable as e:
+                    raise RuntimeError(str(e))
+            else:
+                store = LocalArtifactStore(root=Path(getattr(settings, "etl_staging_dir", ".staging")))
             manifest = store.get_manifest(manifest_key)
             items_iter = items_from_manifest(manifest)
             def progress(stage: str, *, done: int | None = None, total: int | None = None, note: str | None = None):

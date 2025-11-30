@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rag-run-queue
+  labels:
+    app: rag-run-queue
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rag-run-queue
+  template:
+    metadata:
+      labels:
+        app: rag-run-queue
+    spec:
+      containers:
+        - name: worker
+          image: ghcr.io/your-org/discord-rag-bot:latest
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: discord-rag-config
+            - secretRef:
+                name: discord-rag-secrets
+          command: ["rag-run-queue"]
+          args: ["--poll", "5"]
+

@@ -14,6 +14,7 @@ from rag_core.ingestion.github import GitRepoSource, GitHubOrgSource
 from rag_core.ingestion.filesystem import FilesystemSource
 from rag_core.ingestion.chunked import ChunkingSource
 from rag_core.etl.artifacts import LocalArtifactStore
+from rag_core.etl.artifacts_s3 import S3ArtifactStore, S3Unavailable
 from rag_core.etl.pipeline import build_manifest
 from pathlib import Path
 
@@ -33,6 +34,26 @@ class IndexQueueCog(commands.Cog):
     local = app_commands.Group(name="local", description="Local filesystem sources", parent=queue)
     web = app_commands.Group(name="web", description="Web sources (URLs, crawl)", parent=queue)
     checksum = app_commands.Group(name="checksum", description="Checksum-only update jobs", parent=queue)
+
+    def _artifact_store(self):
+        backend = (getattr(settings, "etl_staging_backend", "local") or "local").lower()
+        if backend == "s3":
+            if not getattr(settings, "s3_staging_bucket", None):
+                raise RuntimeError("S3 staging selected but APP_S3_STAGING_BUCKET not set")
+            try:
+                return S3ArtifactStore(
+                    bucket=settings.s3_staging_bucket,  # type: ignore[arg-type]
+                    prefix=getattr(settings, "s3_staging_prefix", "rag-artifacts"),
+                    region=getattr(settings, "s3_region", None),
+                    endpoint_url=getattr(settings, "s3_endpoint_url", None),
+                    access_key_id=getattr(settings, "s3_access_key_id", None),
+                    secret_access_key=getattr(settings, "s3_secret_access_key", None),
+                )
+            except S3Unavailable as e:
+                raise RuntimeError(str(e))
+        # default local
+        from pathlib import Path as _Path
+        return LocalArtifactStore(root=_Path(getattr(settings, "etl_staging_dir", ".staging")))
 
     async def _watch_job(self, message: discord.Message, job_id: int):
         import asyncio
@@ -84,7 +105,7 @@ class IndexQueueCog(commands.Cog):
         if chunk_size:
             source = ChunkingSource(source=source, chunk_size=chunk_size or 0, overlap=chunk_overlap or 200)  # type: ignore[arg-type]
         manifest = await __import__("asyncio").to_thread(build_manifest, source)  # type: ignore[arg-type]
-        store = LocalArtifactStore(root=Path(getattr(settings, "etl_staging_dir", ".staging")))
+        store = self._artifact_store()
         key = store.put_manifest(manifest)
         payload = {"artifact_key": key}
         job_id = await self.bot.services.job_repo.enqueue("ingest", payload)  # type: ignore[attr-defined]
@@ -123,7 +144,7 @@ class IndexQueueCog(commands.Cog):
         if chunk_size:
             source = ChunkingSource(source=source, chunk_size=chunk_size or 0, overlap=chunk_overlap or 200)  # type: ignore[arg-type]
         manifest = await __import__("asyncio").to_thread(build_manifest, source)  # type: ignore[arg-type]
-        store = LocalArtifactStore(root=Path(getattr(settings, "etl_staging_dir", ".staging")))
+        store = self._artifact_store()
         key = store.put_manifest(manifest)
         payload = {"artifact_key": key}
         job_id = await self.bot.services.job_repo.enqueue("ingest", payload)  # type: ignore[attr-defined]
@@ -156,7 +177,7 @@ class IndexQueueCog(commands.Cog):
         if chunk_size:
             source = ChunkingSource(source=source, chunk_size=chunk_size or 0, overlap=chunk_overlap or 200)  # type: ignore[arg-type]
         manifest = await __import__("asyncio").to_thread(build_manifest, source)  # type: ignore[arg-type]
-        store = LocalArtifactStore(root=Path(getattr(settings, "etl_staging_dir", ".staging")))
+        store = self._artifact_store()
         key = store.put_manifest(manifest)
         payload = {"artifact_key": key}
         job_id = await self.bot.services.job_repo.enqueue("ingest", payload)  # type: ignore[attr-defined]
@@ -210,7 +231,7 @@ class IndexQueueCog(commands.Cog):
         await interaction.followup.send("Building manifest (URLs)…", ephemeral=True)
         source = UrlSource(urls=url_list)
         manifest = await __import__("asyncio").to_thread(build_manifest, source)
-        store = LocalArtifactStore(root=Path(getattr(settings, "etl_staging_dir", ".staging")))
+        store = self._artifact_store()
         key = store.put_manifest(manifest)
         payload = {"artifact_key": key}
         job_id = await self.bot.services.job_repo.enqueue("ingest", payload)  # type: ignore[attr-defined]
@@ -227,7 +248,7 @@ class IndexQueueCog(commands.Cog):
         await interaction.followup.send("Building manifest (website)…", ephemeral=True)
         source = WebsiteCrawlerSource(start_urls=[start_url], allowed_prefixes=prefixes, max_pages=max_pages)
         manifest = await __import__("asyncio").to_thread(build_manifest, source)
-        store = LocalArtifactStore(root=Path(getattr(settings, "etl_staging_dir", ".staging")))
+        store = self._artifact_store()
         key = store.put_manifest(manifest)
         payload = {"artifact_key": key}
         job_id = await self.bot.services.job_repo.enqueue("ingest", payload)  # type: ignore[attr-defined]

@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: discord-rag-bot
+  labels:
+    app: discord-rag-bot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: discord-rag-bot
+  template:
+    metadata:
+      labels:
+        app: discord-rag-bot
+    spec:
+      containers:
+        - name: bot
+          image: ghcr.io/your-org/discord-rag-bot:latest
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: discord-rag-config
+            - secretRef:
+                name: discord-rag-secrets
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          command: ["discord-rag-bot"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: discord-rag-bot
+  labels:
+    app: discord-rag-bot
+spec:
+  selector:
+    app: discord-rag-bot
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+

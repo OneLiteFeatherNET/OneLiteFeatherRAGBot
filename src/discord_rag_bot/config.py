@@ -36,6 +36,14 @@ class Settings(BaseSettings):
     queue_watch_poll_sec: float = 5.0
     # ETL staging directory (for manifests)
     etl_staging_dir: str = ".staging"
+    etl_staging_backend: str = "local"  # local|s3
+    # S3 staging (optional, used when etl_staging_backend=s3)
+    s3_staging_bucket: Optional[str] = None
+    s3_staging_prefix: str = "rag-artifacts"
+    s3_region: Optional[str] = None
+    s3_endpoint_url: Optional[str] = None  # e.g., http://minio:9000
+    s3_access_key_id: Optional[str] = None
+    s3_secret_access_key: Optional[str] = None
     # Job backend selection: postgres (default) | redis | rabbitmq
     job_backend: str = "postgres"
     # Redis configuration (optional; used when job_backend=redis)
@@ -130,6 +138,8 @@ class Settings(BaseSettings):
     estimate_tokens_per_sec: float = 2500.0  # approximate embedding throughput
     estimate_db_writes_per_sec: float = 200.0  # approximate upsert rate
     estimate_overhead_sec: float = 5.0  # fixed overhead per job
+    # Health HTTP server (for k8s probes)
+    health_http_port: Optional[int] = None  # e.g., 8080 to enable /healthz
 
     # Database (required for RAG API service or direct DB usage)
     pg_host: Optional[str] = None
