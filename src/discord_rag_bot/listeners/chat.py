@@ -12,6 +12,7 @@ from ..infrastructure.config_store import load_prompt_effective
 from ..infrastructure.gating import should_use_rag
 from ..infrastructure.language import get_language_hint
 from rag_core.metrics import discord_messages_processed_total, rag_queries_total
+from ..infrastructure.credits import estimate_credits_for_question, pre_authorize, adjust_usage, resolve_user_limit_from_roles
 
 
 class ChatListenerCog(commands.Cog):
@@ -145,6 +146,30 @@ class ChatListenerCog(commands.Cog):
 
         # Send friendly placeholder reply and then edit when ready
         placeholder_msg = await message.reply("🧠 Einen kleinen Moment – ich suche passende Informationen und schreibe die Antwort …")
+        # Credits: pre-authorize based on estimate (if enabled)
+        est_credits = 0
+        reserved = 0
+        user_limit = None
+        if getattr(self.bot, "services", None) and getattr(self.bot.services, "rag", None):  # basic sanity
+            try:
+                from ..config import settings as _settings
+                if getattr(_settings, "credit_enabled", False):
+                    est_credits = estimate_credits_for_question(question)
+                    # Resolve user limit by roles
+                    roles = []
+                    if isinstance(message.author, discord.Member):
+                        for r in message.author.roles:
+                            roles.append((int(getattr(r, "id", 0) or 0), str(getattr(r, "name", "") or "")))
+                    user_limit = resolve_user_limit_from_roles(member_roles=roles)
+                    # Temporarily set default limit to computed user_limit for reservation
+                    # Pre-authorize in a thread to avoid event-loop blocking
+                    ok, _, _ = await asyncio.to_thread(pre_authorize, int(message.author.id), int(est_credits), user_limit_override=int(user_limit))
+                    if not ok:
+                        await placeholder_msg.edit(content="❌ Keine Credits mehr verfügbar (Limit oder globales Budget erreicht). Bitte später erneut versuchen.")
+                        return
+                    reserved = est_credits
+            except Exception:
+                pass
         # Save the incoming user message into memory (best-effort)
         try:
             self.bot.services.memory.record_user_message(  # type: ignore[attr-defined]
@@ -170,6 +195,19 @@ class ChatListenerCog(commands.Cog):
         except Exception:
             # Fallback: send a fresh reply if edit fails
             await message.reply(clip_discord_message(text))
+        # Adjust credits after answer based on actual output length (best-effort)
+        try:
+            if reserved > 0:
+                from ..config import settings as _settings
+                if getattr(_settings, "credit_enabled", False):
+                    # crude estimate: input + actual output
+                    out_tokens = int(len(text or "") * float(getattr(_settings, "credit_tokens_per_char", 0.25)))
+                    final = int((int(len(question) * float(_settings.credit_tokens_per_char)) + out_tokens + 999) // 1000 * float(_settings.credit_per_1k_tokens))
+                    delta = max(0, int(final) - int(reserved))
+                    if delta != 0:
+                        await asyncio.to_thread(pre_authorize, int(message.author.id), int(delta))
+        except Exception:
+            pass
         # Save bot answer and update summary in background (best-effort)
         try:
             self.bot.services.memory.record_assistant_message(  # type: ignore[attr-defined]

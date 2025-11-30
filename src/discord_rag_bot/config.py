@@ -87,6 +87,22 @@ class Settings(BaseSettings):
     pg_password: Optional[str] = None
     pg_database: Optional[str] = None
 
+    # Credits & Budgeting
+    credit_enabled: bool = False
+    credit_period: str = "month"  # month|rolling
+    credit_global_cap: int = 100000  # total credits per period across all users
+    credit_default_limit: int = 1000  # per-user default credits per period
+    # JSON maps, e.g.: {"gold": 5000, "silver": 2000}
+    credit_rank_limits: dict[str, int] = {}
+    # Map role name -> rank (JSON), e.g.: {"Gold": "gold", "VIP": "gold"}
+    credit_role_ranks_by_name: dict[str, str] = {}
+    # Map role ID (as string) -> rank (JSON), e.g.: {"123456": "gold"}
+    credit_role_ranks_by_id: dict[str, str] = {}
+    # Estimation: ~tokens per char and expected output tokens; 1 credit per 1k tokens by default
+    credit_tokens_per_char: float = 0.25
+    credit_est_output_tokens: int = 600
+    credit_per_1k_tokens: float = 1.0
+
     @property
     def db(self) -> Db:
         if not all([self.pg_host, self.pg_user, self.pg_password, self.pg_database]):
