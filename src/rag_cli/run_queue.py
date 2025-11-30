@@ -83,7 +83,23 @@ def main() -> None:
     parser.add_argument("--poll", type=float, default=5.0, help="Polling interval in seconds")
     args = parser.parse_args()
 
-    job_repo: JobRepository = PostgresJobRepository(db=settings.db)
+    backend = (getattr(settings, "job_backend", "postgres") or "postgres").lower()
+    if backend == "postgres":
+        job_repo = PostgresJobRepository(db=settings.db)
+    elif backend == "redis":
+        from rag_core.db.redis_jobs import RedisJobRepository
+
+        if not getattr(settings, "redis_url", None):
+            raise ValueError("APP_REDIS_URL is required when APP_JOB_BACKEND=redis")
+        job_repo = RedisJobRepository(url=settings.redis_url, namespace=getattr(settings, "redis_namespace", "rag"))
+    elif backend == "rabbitmq":
+        from rag_core.db.rabbitmq_jobs import RabbitMQJobRepository
+
+        if not getattr(settings, "rabbitmq_url", None):
+            raise ValueError("APP_RABBITMQ_URL is required when APP_JOB_BACKEND=rabbitmq")
+        job_repo = RabbitMQJobRepository(url=settings.rabbitmq_url, queue=getattr(settings, "rabbitmq_queue", "rag_jobs"))
+    else:
+        raise ValueError(f"Unknown APP_JOB_BACKEND: {backend}")
     asyncio.run(job_repo.ensure())
     service = build_service()
 
