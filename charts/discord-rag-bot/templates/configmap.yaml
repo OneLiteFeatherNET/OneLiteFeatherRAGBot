@@ -1,0 +1,27 @@
+{{- if .Values.global.createConfigMap }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "discord-rag-bot.fullname" . }}-config
+  labels:
+    {{- include "discord-rag-bot.labels" . | nindent 4 }}
+data:
+  APP_JOB_BACKEND: {{ .Values.global.jobBackend | quote }}
+  APP_QUEUE_WATCH_POLL_SEC: {{ .Values.global.queueWatchPollSec | quote }}
+  APP_HEALTH_HTTP_PORT: {{ .Values.global.healthHttpPort | quote }}
+  APP_JOB_QUEUE_DEFAULT: {{ .Values.global.jobQueues.default | quote }}
+  APP_RABBITMQ_QUEUE: {{ .Values.global.jobQueues.default | quote }}
+  {{- with .Values.global.jobQueues.ingest }}
+  APP_JOB_QUEUE_INGEST: {{ . | quote }}
+  {{- end }}
+  {{- with .Values.global.jobQueues.checksum }}
+  APP_JOB_QUEUE_CHECKSUM: {{ . | quote }}
+  {{- end }}
+  {{- with .Values.global.jobQueues.prune }}
+  APP_JOB_QUEUE_PRUNE: {{ . | quote }}
+  {{- end }}
+  {{- range $k, $v := .Values.global.env }}
+  {{ $k }}: {{ $v | quote }}
+  {{- end }}
+{{- end }}
+

@@ -1,0 +1,24 @@
+{{- if and .Values.bot.enabled .Values.bot.autoscaling.enabled }}
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "discord-rag-bot.fullname" . }}-bot
+  labels:
+    {{- include "discord-rag-bot.labels" . | nindent 4 }}
+    app.kubernetes.io/component: bot
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "discord-rag-bot.fullname" . }}
+  minReplicas: {{ .Values.bot.autoscaling.minReplicas }}
+  maxReplicas: {{ .Values.bot.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.bot.autoscaling.targetCPUUtilizationPercentage }}
+{{- end }}
+

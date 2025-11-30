@@ -1,0 +1,65 @@
+{{- if .Values.workers.enabled }}
+{{- $fullname := include "discord-rag-bot.fullname" . -}}
+{{- $labels := include "discord-rag-bot.labels" . -}}
+{{- range $i, $type := .Values.workers.types }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $fullname }}-worker-{{ $type }}
+  labels:
+    {{- $labels | nindent 4 }}
+    app.kubernetes.io/component: worker
+    app.kubernetes.io/part-of: {{ $fullname }}
+    app.kubernetes.io/name: {{ $fullname }}-worker-{{ $type }}
+spec:
+  replicas: {{ $.Values.workers.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: worker
+      app.kubernetes.io/name: {{ $fullname }}-worker-{{ $type }}
+  template:
+    metadata:
+      labels:
+        {{- $labels | nindent 8 }}
+        app.kubernetes.io/component: worker
+        app.kubernetes.io/name: {{ $fullname }}-worker-{{ $type }}
+    spec:
+      {{- with $.Values.image.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "discord-rag-bot.serviceAccountName" $ }}
+      containers:
+        - name: worker
+          image: "{{ $.Values.image.repository }}:{{ $.Values.image.tag }}"
+          imagePullPolicy: {{ $.Values.image.pullPolicy }}
+          command: ["rag-run-queue"]
+          args: ["--poll", "{{ $.Values.workers.pollSeconds }}"]
+          env:
+            - name: APP_WORKER_QUEUE_TYPE
+              value: {{ $type | quote }}
+            - name: APP_HEALTH_HTTP_PORT
+              value: {{ $.Values.global.healthHttpPort | quote }}
+          envFrom:
+            {{- if $.Values.global.createConfigMap }}
+            - configMapRef:
+                name: {{ $fullname }}-config
+            {{- else if $.Values.global.existingConfigMap }}
+            - configMapRef:
+                name: {{ $.Values.global.existingConfigMap }}
+            {{- end }}
+            {{- if $.Values.global.createSecret }}
+            - secretRef:
+                name: {{ $fullname }}-secrets
+            {{- else if $.Values.global.existingSecret }}
+            - secretRef:
+                name: {{ $.Values.global.existingSecret }}
+            {{- end }}
+          {{- with $.Values.workers.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+---
+{{- end }}
+{{- end }}
+

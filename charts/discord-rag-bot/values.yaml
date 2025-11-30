@@ -1,0 +1,106 @@
+nameOverride: ""
+fullnameOverride: ""
+
+image:
+  repository: ghcr.io/your-org/discord-rag-bot
+  tag: "latest"
+  pullPolicy: IfNotPresent
+  imagePullSecrets: []
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+  automount: true
+
+global:
+  # Common non-secret environment for both bot and workers
+  env: {}
+  # Example:
+  #   APP_AI_PROVIDER: "ollama"
+  #   APP_EMBED_PROVIDER: "ollama"
+  #   APP_LLM_MODEL: "gemma3:4b"
+  #   APP_EMBED_MODEL: "embeddinggemma:latest"
+  #   APP_PG_HOST: "postgres"
+  #   APP_PG_PORT: "5432"
+  #   APP_PG_USER: "postgres"
+  #   APP_PG_DATABASE: "postgres"
+
+  # Secret key/values (placed into Secret if createSecret=true)
+  secretEnv: {}
+  # Example:
+  #   APP_DISCORD_TOKEN: "..."
+  #   OPENAI_API_KEY: "..."
+  #   APP_PG_PASSWORD: "postgres"
+  #   APP_RABBITMQ_URL: "amqp://user:pass@rabbitmq:5672/"
+
+  # Queue configuration
+  jobBackend: rabbitmq
+  jobQueues:
+    default: rag_jobs
+    ingest: ""
+    checksum: ""
+    prune: ""
+
+  queueWatchPollSec: 5
+  healthHttpPort: 8080
+
+  # Config & secret management
+  createConfigMap: true
+  existingConfigMap: ""
+  createSecret: true
+  existingSecret: ""
+
+bot:
+  enabled: true
+  replicaCount: 1
+  podAnnotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8080"
+    prometheus.io/path: "/metrics"
+  podLabels: {}
+  service:
+    enabled: true
+    type: ClusterIP
+    port: 80
+    targetPort: 8080
+  resources: {}
+  livenessProbe:
+    httpGet:
+      path: /healthz
+      port: http
+    initialDelaySeconds: 10
+    periodSeconds: 20
+  readinessProbe:
+    httpGet:
+      path: /readyz
+      port: http
+    initialDelaySeconds: 5
+    periodSeconds: 10
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 3
+    targetCPUUtilizationPercentage: 40
+
+workers:
+  enabled: true
+  # Define one deployment per queue type
+  # You can remove types you don't need
+  types:
+    - ingest
+    - checksum
+    - prune
+  replicaCount: 1
+  pollSeconds: 5
+  resources: {}
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 50
+
+nodeSelector: {}
+affinity: {}
+tolerations: []
+

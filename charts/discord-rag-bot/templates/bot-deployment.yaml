@@ -1,0 +1,88 @@
+{{- if .Values.bot.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "discord-rag-bot.fullname" . }}
+  labels:
+    {{- include "discord-rag-bot.labels" . | nindent 4 }}
+    app.kubernetes.io/component: bot
+spec:
+  replicas: {{ .Values.bot.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "discord-rag-bot.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: bot
+  template:
+    metadata:
+      labels:
+        {{- include "discord-rag-bot.labels" . | nindent 8 }}
+        app.kubernetes.io/component: bot
+        {{- with .Values.bot.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.bot.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- with .Values.image.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "discord-rag-bot.serviceAccountName" . }}
+      containers:
+        - name: bot
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["discord-rag-bot"]
+          envFrom:
+            {{- if .Values.global.createConfigMap }}
+            - configMapRef:
+                name: {{ include "discord-rag-bot.fullname" . }}-config
+            {{- else if .Values.global.existingConfigMap }}
+            - configMapRef:
+                name: {{ .Values.global.existingConfigMap }}
+            {{- end }}
+            {{- if .Values.global.createSecret }}
+            - secretRef:
+                name: {{ include "discord-rag-bot.fullname" . }}-secrets
+            {{- else if .Values.global.existingSecret }}
+            - secretRef:
+                name: {{ .Values.global.existingSecret }}
+            {{- end }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.bot.service.targetPort }}
+          {{- with .Values.bot.readinessProbe }}
+          readinessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.bot.livenessProbe }}
+          livenessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.bot.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+---
+{{- if and .Values.bot.service.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "discord-rag-bot.fullname" . }}
+  labels:
+    {{- include "discord-rag-bot.labels" . | nindent 4 }}
+    app.kubernetes.io/component: bot
+spec:
+  type: {{ .Values.bot.service.type }}
+  selector:
+    {{- include "discord-rag-bot.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: bot
+  ports:
+    - name: http
+      port: {{ .Values.bot.service.port }}
+      targetPort: http
+{{- end }}
+{{- end }}
+
