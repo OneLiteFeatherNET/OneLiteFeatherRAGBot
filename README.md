@@ -108,8 +108,13 @@ Message-based Q&A (mention/reply)
 License
 MIT — see `LICENSE`.
   - `run_queue.py` – queue worker (`rag-run-queue`) that processes jobs created from Discord
-- Index queue from Discord
-  - `/queue_github_repo repo:<url> [branch] [exts] [chunk_size] [chunk_overlap]`
-  - `/queue_github_org org:<name> [visibility] [include_archived] [topics] [branch] [exts] [chunk_size] [chunk_overlap]`
-  - `/queue_local_dir repo_root:<path> repo_url:<url> [exts] [chunk_size] [chunk_overlap]`
-  - Then run the worker: `uv run rag-run-queue --once` or as a long‑running process.
+
+Index queue from Discord
+- `/queue github repo repo:<url> [branch] [exts] [chunk_size] [chunk_overlap]`
+- `/queue github org org:<name> [visibility] [include_archived] [topics] [branch] [exts] [chunk_size] [chunk_overlap]`
+- `/queue local dir repo_root:<path> repo_url:<url> [exts] [chunk_size] [chunk_overlap]`
+- `/queue list [status] [limit]` – list jobs (admin only)
+- `/queue show job_id:<id>` – show job details (admin only)
+- `/queue retry job_id:<id>` – retry failed/canceled job (admin only)
+- `/queue cancel job_id:<id>` – cancel pending/processing job (best‑effort, admin only)
+- Then run the worker: `uv run rag-run-queue --once` or as a long‑running process.
