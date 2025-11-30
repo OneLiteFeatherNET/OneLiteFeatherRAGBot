@@ -72,15 +72,11 @@ class ChatListenerCog(commands.Cog):
             # nothing to ask
             return
 
-        await message.channel.typing().__aenter__()
-
         def run_query() -> RagResult:
             return self.bot.services.rag.query(question)  # type: ignore[attr-defined]
 
-        try:
+        async with message.channel.typing():
             result = await asyncio.to_thread(run_query)
-        finally:
-            await message.channel.typing().__aexit__(None, None, None)
 
         text = result.answer
         if result.sources:
