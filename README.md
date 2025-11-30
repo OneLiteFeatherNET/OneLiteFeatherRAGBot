@@ -104,6 +104,7 @@ Extending the Bot
 Message-based Q&A (mention/reply)
 - You can trigger RAG answers by mentioning the bot or replying to the bot and writing a question.
 - Enable in `.env`: `APP_ENABLE_MESSAGE_CONTENT_INTENT=true` and enable the “Message Content Intent” in the Discord Developer Portal for your bot.
+ - When replying to the bot, any text you add is treated as your question and the replied bot message is included as context automatically.
 
 License
 MIT — see `LICENSE`.

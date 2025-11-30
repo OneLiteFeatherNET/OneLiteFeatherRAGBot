@@ -45,17 +45,31 @@ class ChatListenerCog(commands.Cog):
 
         is_mention = self.bot.user in message.mentions
         is_reply_to_bot = False
+        ref_msg: Optional[discord.Message] = None
         if message.reference and isinstance(message.reference.resolved, discord.Message):
-            ref_msg: discord.Message = message.reference.resolved
+            ref_msg = message.reference.resolved
             is_reply_to_bot = ref_msg.author.id == self.bot.user.id
 
         if not (is_mention or is_reply_to_bot):
             return
 
         # Build question by removing bot mention
-        question = self._strip_bot_mention(message.content or "")
+        user_text = self._strip_bot_mention(message.content or "")
+
+        # For replies to the bot, allow mixing prior bot message as context
+        if is_reply_to_bot:
+            ref_text = (ref_msg.content or "").strip() if ref_msg else ""
+            if user_text and ref_text:
+                question = f"{user_text}\n\nContext (previous bot message):\n{ref_text}"
+            elif user_text:
+                question = user_text
+            else:
+                question = ref_text
+        else:
+            question = user_text
+
         if not question:
-            # If user replied to bot without text, do nothing
+            # nothing to ask
             return
 
         await message.channel.typing().__aenter__()
@@ -77,4 +91,3 @@ class ChatListenerCog(commands.Cog):
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(ChatListenerCog(bot))
-
