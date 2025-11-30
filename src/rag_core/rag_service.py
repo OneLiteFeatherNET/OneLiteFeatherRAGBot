@@ -14,6 +14,7 @@ from .providers.base import AIProvider
 from .checksums import ChecksumStore, ChecksumRecord
 from .ingestion.filesystem import FilesystemSource
 from .ingestion.base import IngestItem
+from sqlalchemy import create_engine, text
 
 
 @dataclass(frozen=True)
@@ -76,6 +77,8 @@ class RAGService:
         self._qe = self._index.as_query_engine(similarity_top_k=self.rag_config.top_k)
         self._log.info("RAGService initialized: table=%s embed_dim=%s top_k=%s", vs_config.table_name, vs_config.embed_dim, self.rag_config.top_k)
         self._checksums = ChecksumStore(db=vs_config.db)
+        # Verify existing table embedding dimension if table exists
+        self._verify_embed_dim()
 
     def query(self, question: str) -> RagResult:
         response = self._qe.query(question)
@@ -119,6 +122,63 @@ class RAGService:
         self._log.info("Indexed %d documents (chunks). Updating checksums ...", len(to_index))
         self._checksums.upsert_many(updates)
         self._log.info("Checksum update completed (%d records)", len(updates))
+
+    def _verify_embed_dim(self) -> None:
+        """Ensure existing pgvector table has expected embedding dimension.
+
+        Checks the "data_" table (used by PGVectorStore) for the embedding column typmod.
+        If the table doesn't exist yet, the check is skipped. If it exists with a
+        different dimension, raise a clear error with remediation steps.
+        """
+        table_name = f"data_{self.vs_config.table_name}"
+        try:
+            dsn = (
+                f"postgresql+psycopg2://{self.vs_config.db.user}:{self.vs_config.db.password}"
+                f"@{self.vs_config.db.host}:{self.vs_config.db.port}/{self.vs_config.db.database}"
+            )
+            engine = create_engine(dsn, pool_pre_ping=True)
+            with engine.connect() as conn:
+                sql = text(
+                    """
+                    SELECT (a.atttypmod - 4) / 4 AS dims
+                    FROM pg_attribute a
+                    JOIN pg_class c ON a.attrelid = c.oid
+                    JOIN pg_namespace n ON c.relnamespace = n.oid
+                    WHERE n.nspname = 'public' AND c.relname = :table AND a.attname = 'embedding'
+                    """
+                )
+                row = conn.execute(sql, {"table": table_name}).fetchone()
+                if not row:
+                    # Table not found yet; skip
+                    self._log.debug("Embedding dimension check skipped (table %s not found)", table_name)
+                    return
+                actual = int(row[0]) if row[0] is not None else None
+                expected = int(self.vs_config.embed_dim)
+                if actual is None:
+                    self._log.debug("Embedding dimension check inconclusive for table %s", table_name)
+                    return
+                if actual != expected:
+                    raise ValueError(
+                        (
+                            "Embedding dimension mismatch for table '%s': actual=%d expected=%d.\n"
+                            "Fix options:\n"
+                            "- Set APP_TABLE_NAME to a new table (e.g., '%s_%d') and re-index, or\n"
+                            "- Drop existing tables (data_%s, index_%s) and re-index, or\n"
+                            "- Adjust APP_EMBED_PROVIDER/APP_EMBED_MODEL/APP_EMBED_DIM to match the existing table."
+                        )
+                        % (
+                            table_name,
+                            actual,
+                            expected,
+                            self.vs_config.table_name,
+                            expected,
+                            self.vs_config.table_name,
+                            self.vs_config.table_name,
+                        )
+                    )
+        except Exception as e:
+            # If anything goes wrong, log and continue; core operations may still work
+            self._log.debug("Embed dimension check encountered an issue: %s", e)
 
     @staticmethod
     def _extract_sources(response) -> list[str]:
