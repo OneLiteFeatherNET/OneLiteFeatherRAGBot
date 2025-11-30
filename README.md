@@ -3,6 +3,7 @@ OneLiteFeather Discord RAG Bot (pgvector + LlamaIndex)
 
 Overview
 - Discord bot + queue-based worker ecosystem that talks directly to Postgres/pgvector for retrieval-based answers (no REST intermediary).
+- Conversation memory: per-user Kontext + kompakte Zusammenfassung wird in Postgres gespeichert und fließt in Antworten ein.
 - Queue jobs are delivered via RabbitMQ with Postgres metadata so multiple workers can scale horizontally; an indexing CLI is still available for ad-hoc runs.
 - Modular architecture: commands/listeners, DI services, provider abstraction (OpenAI, Ollama, vLLM) and built-in Prometheus metrics for Discord, RAG, and jobs.
 - docker-compose includes Postgres/pgvector and optional Ollama for local end-to-end testing.
@@ -19,6 +20,7 @@ Scaling
 - Deploying to Kubernetes: use the provided bot and worker deployments plus the dedicated HPAs (`k8s/bot-hpa.yaml`, `k8s/worker-hpa.yaml`).
 - The bot exposes `/metrics`, `/healthz`, `/readyz` on `APP_HEALTH_HTTP_PORT` so k8s liveness/readiness and Prometheus scraping work.
 - Workers will auto-scale through RabbitMQ and the `rag-run-queue` HPA; configure RabbitMQ + Postgres as a shared queue reference.
+- Style: Antworten sind hilfreich mit trockenem Sarkasmus und passenden Discord‑Emojis; Emoji-/Style‑Guides können via RAG indexiert werden.
 
 
 

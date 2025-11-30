@@ -10,6 +10,7 @@ import asyncio
 from rag_core.tools.registry import ToolsRegistry
 from ..infrastructure.config_store import ensure_store as ensure_config_store
 from ..infrastructure.config_store import migrate_prompts_files_to_db
+from ..infrastructure.memory import ensure_store as ensure_memory_store
 
 
 def build_services() -> BotServices:
@@ -43,6 +44,11 @@ def build_services() -> BotServices:
             migrate_prompts_files_to_db(delete_files=True)
         except Exception:
             pass
+    # Ensure memory store
+    try:
+        ensure_memory_store()
+    except Exception:
+        pass
     tools = ToolsRegistry()
     return BotServices(rag=rag, job_repo_factory=job_repo_factory, job_repo_default=default_job_repo, tools=tools)
 

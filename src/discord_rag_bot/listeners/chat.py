@@ -9,6 +9,7 @@ from discord.ext import commands
 from ..util.text import clip_discord_message
 from rag_core import RagResult
 from ..infrastructure.config_store import load_prompt_effective
+from ..infrastructure.memory import save_message, load_slice, update_summary_with_ai
 from ..infrastructure.gating import should_use_rag
 from ..infrastructure.language import get_language_hint
 from rag_core.metrics import discord_messages_processed_total, rag_queries_total
@@ -80,8 +81,30 @@ class ChatListenerCog(commands.Cog):
             # nothing to ask
             return
 
+        def _style_prompt(base: str | None, mem_summary: str | None, recent: list[tuple[str, str]]) -> str:
+            style = (
+                "Du antwortest hilfreich, prägnant und mit trockenem Sarkasmus, ohne unhöflich zu sein.\n"
+                "Nutze passende Discord-Emojis (z. B. 😅, 🤔, ✅, ❌, 🧠, 🔧, 📎), aber nicht übermäßig.\n"
+                "Wenn Daten fehlen, sag es ehrlich. Antworte in der Sprache des Nutzers.\n"
+            )
+            mem = ""
+            if mem_summary:
+                mem += f"\nNutzerprofil (Zusammenfassung):\n{mem_summary}\n"
+            if recent:
+                # Kurzer Kontext aus letzten Beiträgen
+                lines = []
+                for r, c in recent[-6:]:
+                    prefix = "User" if r == "user" else "Bot"
+                    lines.append(f"- {prefix}: {c[:300]}")
+                mem += "\nLetzte Unterhaltungsschritte:\n" + "\n".join(lines) + "\n"
+            base = base or ""
+            return (base + "\n\n" + style + mem).strip()
+
         def run_query() -> tuple[str, list[str]]:
-            prompt = load_prompt_effective(message.guild.id if message.guild else None, message.channel.id)
+            base_prompt = load_prompt_effective(message.guild.id if message.guild else None, message.channel.id)
+            # Load user memory slice (summary + recent channel messages)
+            mem = load_slice(user_id=message.author.id, channel_id=message.channel.id)
+            prompt = _style_prompt(base_prompt, mem.summary, mem.recent)
             lang_hint = get_language_hint(question)
             if lang_hint:
                 prompt = f"{prompt}\n\nAntwortsprache: {lang_hint}"
@@ -123,6 +146,17 @@ class ChatListenerCog(commands.Cog):
 
         # Send friendly placeholder reply and then edit when ready
         placeholder_msg = await message.reply("🧠 Einen kleinen Moment – ich suche passende Informationen und schreibe die Antwort …")
+        # Save the incoming user message into memory (best-effort)
+        try:
+            save_message(
+                user_id=message.author.id,
+                guild_id=message.guild.id if message.guild else None,
+                channel_id=message.channel.id if hasattr(message.channel, "id") else None,
+                role="user",
+                content=message.content or "",
+            )
+        except Exception:
+            pass
         answer, sources = await asyncio.to_thread(run_query)
         if sources:
             try:
@@ -138,6 +172,43 @@ class ChatListenerCog(commands.Cog):
         except Exception:
             # Fallback: send a fresh reply if edit fails
             await message.reply(clip_discord_message(text))
+        # Save bot answer and update summary in background (best-effort)
+        try:
+            save_message(
+                user_id=message.author.id,
+                guild_id=message.guild.id if message.guild else None,
+                channel_id=message.channel.id if hasattr(message.channel, "id") else None,
+                role="assistant",
+                content=text,
+            )
+        except Exception:
+            pass
+        # Summarize/update user memory asynchronously
+        async def _update_summary_bg():
+            try:
+                mem_now = load_slice(user_id=message.author.id, channel_id=message.channel.id)
+                updated = update_summary_with_ai(
+                    current_summary=mem_now.summary,
+                    user_text=message.content or "",
+                    bot_answer=text,
+                    answer_llm=lambda q, system_prompt: self.bot.services.rag.answer_llm(q, system_prompt=system_prompt),  # type: ignore[attr-defined]
+                )
+                if updated and updated.strip():
+                    save_message(
+                        user_id=message.author.id,
+                        guild_id=message.guild.id if message.guild else None,
+                        channel_id=None,
+                        role="summary",
+                        content=updated.strip(),
+                        kind="summary",
+                    )
+            except Exception:
+                pass
+
+        try:
+            asyncio.create_task(_update_summary_bg())
+        except Exception:
+            pass
 
 
 async def setup(bot: commands.Bot):
