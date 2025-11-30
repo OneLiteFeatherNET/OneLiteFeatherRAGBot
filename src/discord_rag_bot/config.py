@@ -45,8 +45,8 @@ class Settings(BaseSettings):
     # LlamaIndex docstore persistence (stores document/index metadata separate from vectors)
     docstore_persist: bool = True
     docstore_dir: str = ".staging/llama_storage"
-    # LlamaIndex docstore backend: disk|postgres (if postgres, use KV store in Postgres)
-    docstore_backend: str = "disk"
+    # LlamaIndex docstore backend: disk|postgres (default: reuse app Postgres via KV store)
+    docstore_backend: str = "postgres"
     docstore_table: str = "llama_kv"
     # LlamaIndex IndexStore backend (where to store index structs): postgres|disk
     indexstore_backend: str = "postgres"
