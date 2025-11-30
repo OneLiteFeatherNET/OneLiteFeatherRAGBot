@@ -193,24 +193,41 @@ class IndexQueueCog(commands.Cog):
     ):
         await interaction.response.defer(ephemeral=True)
         exts_list = _split_list(exts) or settings.ingest_exts
-        await interaction.followup.send("Building manifest (GitHub org)…", ephemeral=True)
-        source: object = GitHubOrgSource(org=org, visibility=visibility, include_archived=include_archived, topics=_split_list(topics), exts=exts_list, branch=branch)
-        if chunk_size:
-            source = ChunkingSource(source=source, chunk_size=chunk_size or 0, overlap=chunk_overlap or 200)  # type: ignore[arg-type]
-        manifest = await __import__("asyncio").to_thread(build_manifest, source)  # type: ignore[arg-type]
-        store = self._artifact_store()
-        key = store.put_manifest(manifest)
-        payload = {"artifact_key": key}
-        if force:
-            payload["force"] = True
-        job_id = await self.bot.services.job_repo_factory.get("ingest").enqueue("ingest", payload)  # type: ignore[attr-defined]
-        try:
-            jobs_enqueued_total.labels(type="ingest").inc()
-        except Exception:
-            pass
-        msg = await interaction.channel.send(f"Job #{job_id}: queued (github org {org}, manifest={key})")  # type: ignore[union-attr]
-        await interaction.followup.send(f"Queued job #{job_id} for org {org}", ephemeral=True)
-        self.bot.loop.create_task(self._watch_job(msg, job_id))
+        await interaction.followup.send("Listing organization repositories…", ephemeral=True)
+        src_org = GitHubOrgSource(org=org, visibility=visibility, include_archived=include_archived, topics=_split_list(topics), exts=exts_list, branch=branch)
+        urls = src_org._list_repo_urls()
+        if not urls:
+            await interaction.followup.send("(no repositories found)", ephemeral=True)
+            return
+        # Enqueue one job per repo, prefer local clone to avoid API limits
+        enq = self.bot.services.job_repo_factory.get("ingest").enqueue  # type: ignore[attr-defined]
+        job_ids: list[int] = []
+        for u in urls:
+            cfg = {
+                "sources": [
+                    {
+                        "type": "github_repo_local",
+                        "repo": u,
+                        **({"branch": branch} if branch else {}),
+                        **({"exts": exts_list} if exts_list else {}),
+                        "shallow": True,
+                        "fetch_depth": 50,
+                    }
+                ]
+            }
+            if chunk_size:
+                cfg["chunk_size"] = int(chunk_size)
+                cfg["chunk_overlap"] = int(chunk_overlap or 200)
+            if force:
+                cfg["force"] = True
+            jid = await enq("ingest", cfg)
+            try:
+                jobs_enqueued_total.labels(type="ingest").inc()
+            except Exception:
+                pass
+            job_ids.append(int(jid))
+        msg = await interaction.channel.send(f"Queued {len(job_ids)} jobs for org {org}")  # type: ignore[union-attr]
+        await interaction.followup.send(f"Queued {len(job_ids)} repos from {org}", ephemeral=True)
 
     @local.command(name="dir", description="Queue a local directory for indexing")
     @require_admin()
