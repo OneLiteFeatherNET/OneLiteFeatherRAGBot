@@ -115,7 +115,16 @@ class RAGService:
 
         if persist_dir or index_store is not None or doc_store is not None:
             kwargs = {"vector_store": self._vector_store}
+            # Only pass persist_dir if prior files exist (avoid FileNotFoundError on fresh start)
+            add_persist = False
             if persist_dir:
+                try:
+                    doc_json = persist_dir / "docstore.json"
+                    idx_json = persist_dir / "index_store.json"
+                    add_persist = doc_json.exists() or idx_json.exists()
+                except Exception:
+                    add_persist = False
+            if add_persist:
                 kwargs["persist_dir"] = str(persist_dir)
             if index_store is not None:
                 kwargs["index_store"] = index_store
