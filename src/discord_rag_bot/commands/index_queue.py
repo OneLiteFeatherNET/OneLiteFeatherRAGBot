@@ -8,6 +8,7 @@ from discord.ext import commands
 import json
 from ..util.text import clip_discord_message
 from ..config import settings
+from rag_core.ingestion.web import UrlSource, WebsiteCrawlerSource
 
 
 def _split_list(csv: Optional[str]) -> Optional[List[str]]:
@@ -23,6 +24,7 @@ class IndexQueueCog(commands.Cog):
     queue = app_commands.Group(name="queue", description="Manage indexing jobs", default_permissions=discord.Permissions(administrator=True))
     github = app_commands.Group(name="github", description="GitHub sources", parent=queue)
     local = app_commands.Group(name="local", description="Local filesystem sources", parent=queue)
+    web = app_commands.Group(name="web", description="Web sources (URLs, crawl)", parent=queue)
 
     @staticmethod
     def admin_check():
@@ -179,6 +181,35 @@ class IndexQueueCog(commands.Cog):
             f"payload:\n```json\n{payload}\n```"
         )
         await interaction.followup.send(clip_discord_message(text), ephemeral=True)
+
+    @web.command(name="url", description="Queue specific URLs for indexing")
+    @admin_check.__func__()
+    @app_commands.describe(urls="Comma-separated list of URLs")
+    async def web_url(self, interaction: discord.Interaction, urls: str):
+        await interaction.response.defer(ephemeral=True)
+        url_list = [u.strip() for u in urls.split(",") if u.strip()]
+        payload = {"sources": [{"type": "web_url", "urls": url_list}]}
+        job_id = await self.bot.services.job_store.enqueue_async("ingest", payload)  # type: ignore[attr-defined]
+        await interaction.followup.send(f"Queued job #{job_id} for {len(url_list)} URLs", ephemeral=True)
+
+    @web.command(name="website", description="Queue a website crawl for indexing")
+    @admin_check.__func__()
+    @app_commands.describe(start_url="Start URL", allowed_prefixes="Comma-separated URL prefixes", max_pages="Max pages to crawl (default 200)")
+    async def web_site(self, interaction: discord.Interaction, start_url: str, allowed_prefixes: str = "", max_pages: int = 200):
+        await interaction.response.defer(ephemeral=True)
+        prefixes = [p.strip() for p in allowed_prefixes.split(",") if p.strip()] or [start_url]
+        payload = {
+            "sources": [
+                {
+                    "type": "website",
+                    "start_urls": [start_url],
+                    "allowed_prefixes": prefixes,
+                    "max_pages": max_pages,
+                }
+            ]
+        }
+        job_id = await self.bot.services.job_store.enqueue_async("ingest", payload)  # type: ignore[attr-defined]
+        await interaction.followup.send(f"Queued job #{job_id} to crawl {start_url}", ephemeral=True)
 
     @queue.command(name="retry", description="Retry a failed or canceled job")
     @admin_check.__func__()

@@ -46,6 +46,17 @@ Code Structure
         exts: [".md", ".py"]
         branch: main
         token: ${GITHUB_TOKEN}
+      - type: web_url
+        urls:
+          - https://docs.oracle.com/javase/8/docs/api/
+          - https://javadoc.io/doc/org.springframework/spring-core/latest/index.html
+      - type: sitemap
+        sitemap_url: https://example.com/sitemap.xml
+        limit: 200
+      - type: website
+        start_urls: ["https://example.com/docs/"]
+        allowed_prefixes: ["https://example.com/docs/"]
+        max_pages: 500
     ```
 - `src/rag_core/ingestion/` – pluggable ingestion sources
   - `base.py` – `IngestionSource` interface
@@ -54,6 +65,7 @@ Code Structure
   - `composite.py` – combine multiple sources
   - `chunked.py` – chunking wrapper for per‑chunk checksums
   - `../chunking.py` – paragraph‑aware chunker utility
+  - `web.py` – URL, sitemap, and website crawler sources (useful for JavaDocs and docs websites)
   
 
 Environment (APP_ prefix)

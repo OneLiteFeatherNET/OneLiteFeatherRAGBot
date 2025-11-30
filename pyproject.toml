@@ -20,6 +20,7 @@ dependencies = [
     "sqlalchemy>=2.0.44",
     "PyYAML>=6.0.2",
     "requests>=2.32.3",
+    "beautifulsoup4>=4.12.3",
 ]
 
 [project.scripts]

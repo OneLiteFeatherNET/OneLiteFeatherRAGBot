@@ -9,6 +9,7 @@ from discord.ext import commands
 
 from rag_core.ingestion.github import GitRepoSource
 from rag_core.ingestion.filesystem import FilesystemSource
+from rag_core.ingestion.web import UrlSource, WebsiteCrawlerSource
 
 from ..config import settings
 
@@ -104,6 +105,56 @@ class IndexNowCog(commands.Cog):
 
         await asyncio.to_thread(run)
         await interaction.edit_original_response(content=f"Indexing completed for {repo_root} (force={force})")
+
+    @group.command(name="web_url", description="Index specific web URLs now (admin)")
+    @admin_check.__func__()
+    @app_commands.describe(urls="Comma-separated list of URLs", force="Reindex even unchanged content")
+    async def web_url(self, interaction: discord.Interaction, urls: str, force: bool = False):
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        loop = asyncio.get_running_loop()
+        url_list = [u.strip() for u in urls.split(",") if u.strip()]
+
+        def run():
+            source = UrlSource(urls=url_list)
+
+            def progress(stage: str, *, done: int | None = None, total: int | None = None, note: str | None = None):
+                content = f"Indexing URLs: {stage} ({done or 0}/{total or '?'})"
+                try:
+                    asyncio.run_coroutine_threadsafe(
+                        interaction.edit_original_response(content=content), loop
+                    )
+                except Exception:
+                    pass
+
+            self.bot.services.rag.index_items(source.stream(), force=force, progress=progress)  # type: ignore[attr-defined]
+
+        await asyncio.to_thread(run)
+        await interaction.edit_original_response(content=f"Indexing completed for {len(url_list)} URLs (force={force})")
+
+    @group.command(name="website", description="Crawl and index a website section now (admin)")
+    @admin_check.__func__()
+    @app_commands.describe(start_url="Start URL (seed)", allowed_prefixes="Comma-separated URL prefixes to keep within", max_pages="Max pages to crawl", force="Reindex even unchanged content")
+    async def website(self, interaction: discord.Interaction, start_url: str, allowed_prefixes: str = "", max_pages: int = 200, force: bool = False):
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        loop = asyncio.get_running_loop()
+        prefixes = [p.strip() for p in allowed_prefixes.split(",") if p.strip()] or [start_url]
+
+        def run():
+            source = WebsiteCrawlerSource(start_urls=[start_url], allowed_prefixes=prefixes, max_pages=max_pages)
+
+            def progress(stage: str, *, done: int | None = None, total: int | None = None, note: str | None = None):
+                content = f"Crawling {start_url}: {stage} ({done or 0}/{total or '?'})"
+                try:
+                    asyncio.run_coroutine_threadsafe(
+                        interaction.edit_original_response(content=content), loop
+                    )
+                except Exception:
+                    pass
+
+            self.bot.services.rag.index_items(source.stream(), force=force, progress=progress)  # type: ignore[attr-defined]
+
+        await asyncio.to_thread(run)
+        await interaction.edit_original_response(content=f"Website crawl completed (force={force})")
 
 
 async def setup(bot: commands.Bot):

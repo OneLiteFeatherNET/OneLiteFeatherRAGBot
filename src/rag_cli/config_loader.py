@@ -10,6 +10,7 @@ from rag_core.ingestion.base import IngestionSource
 from rag_core.ingestion.filesystem import FilesystemSource
 from rag_core.ingestion.github import GitRepoSource, GitHubOrgSource
 from rag_core.ingestion.composite import CompositeSource
+from rag_core.ingestion.web import UrlSource, SitemapSource, WebsiteCrawlerSource
 
 
 @dataclass
@@ -100,6 +101,19 @@ def config_from_dict(data: dict) -> IngestConfig:
                     exts=item.get("exts"),
                     branch=item.get("branch"),
                     token=item.get("token"),
+                )
+            )
+        elif t == "web_url":
+            urls = item.get("urls") or []
+            srcs.append(UrlSource(urls=list(urls)))
+        elif t == "sitemap":
+            srcs.append(SitemapSource(sitemap_url=item["sitemap_url"], limit=item.get("limit")))
+        elif t == "website":
+            srcs.append(
+                WebsiteCrawlerSource(
+                    start_urls=list(item.get("start_urls") or []),
+                    allowed_prefixes=item.get("allowed_prefixes"),
+                    max_pages=int(item.get("max_pages") or 100),
                 )
             )
         else:
