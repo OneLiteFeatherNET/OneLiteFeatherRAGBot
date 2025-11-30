@@ -9,6 +9,8 @@ from .memory import (
     save_message as legacy_save_message,
     load_slice as legacy_load_slice,
     update_summary_with_ai as legacy_update_summary_with_ai,
+    clear_channel as legacy_clear_channel,
+    clear_all as legacy_clear_all,
 )
 from ..config import settings
 
@@ -40,6 +42,11 @@ class MemoryService(ABC):
     def update_summary(self, *, user_id: int, user_text: str, bot_answer: str, answer_llm: callable) -> Optional[str]:
         ...
 
+    @abstractmethod
+    def clear(self, *, user_id: int, channel_id: Optional[int] = None, scope: str = "channel") -> int:
+        """Clear memory. scope: 'channel' or 'all'. Returns number of items cleared when possible."""
+        ...
+
 
 class FallbackMemoryService(MemoryService):
     """Existing Postgres-backed memory implementation as a fallback."""
@@ -65,6 +72,13 @@ class FallbackMemoryService(MemoryService):
         if updated and updated.strip():
             legacy_save_message(user_id=user_id, guild_id=None, channel_id=None, role="summary", content=updated.strip(), kind="summary")
         return updated
+
+    def clear(self, *, user_id: int, channel_id: Optional[int] = None, scope: str = "channel") -> int:
+        if scope == "all":
+            return legacy_clear_all(user_id=user_id)
+        if channel_id is None:
+            return 0
+        return legacy_clear_channel(user_id=user_id, channel_id=int(channel_id))
 
 
 class LlamaIndexMemoryService(MemoryService):
@@ -178,6 +192,14 @@ class LlamaIndexMemoryService(MemoryService):
             # get recent messages from store
             msgs = self._store.get_messages(key) or []
             tuples: List[Tuple[str, str]] = []
+            # find last reset marker and ignore anything before it
+            last_reset_idx = -1
+            for idx, m in enumerate(msgs):  # type: ignore[index]
+                content = getattr(m, "content", None)
+                if isinstance(content, str) and content.strip().upper().startswith("MEMORY_RESET"):
+                    last_reset_idx = idx
+            if last_reset_idx >= 0:
+                msgs = msgs[last_reset_idx + 1 :]  # type: ignore[index]
             for m in msgs[-limit:]:  # type: ignore[index]
                 # m has .role and .content
                 role = getattr(m, "role", None)
@@ -222,6 +244,31 @@ class LlamaIndexMemoryService(MemoryService):
             legacy_save_message(user_id=user_id, guild_id=None, channel_id=None, role="summary", content=updated.strip(), kind="summary")
         return updated
 
+    def clear(self, *, user_id: int, channel_id: Optional[int] = None, scope: str = "channel") -> int:
+        # LlamaIndex SQLChatStore may not expose deletes; implement logical reset markers.
+        if not self._enabled() or self._store is None:
+            return self._fallback.clear(user_id=user_id, channel_id=channel_id, scope=scope)
+        try:
+            try:
+                # Create a reset marker as SYSTEM message in the appropriate key(s)
+                msg_reset = self._ChatMessage(role=self._MessageRole.SYSTEM, content="MEMORY_RESET")
+            except Exception:
+                msg_reset = self._ChatMessage(role=self._MessageRole.ASSISTANT, content="MEMORY_RESET")
+            count = 0
+            if scope == "all":
+                self._store.add_message(self._summary_key(user_id), msg_reset)
+                if channel_id is not None:
+                    self._store.add_message(self._key(user_id, channel_id), msg_reset)
+                # Also clear legacy rows for privacy
+                count = self._fallback.clear(user_id=user_id, channel_id=channel_id, scope=scope)
+            else:
+                if channel_id is not None:
+                    self._store.add_message(self._key(user_id, channel_id), msg_reset)
+                    count = self._fallback.clear(user_id=user_id, channel_id=channel_id, scope=scope)
+            return int(count)
+        except Exception:
+            return self._fallback.clear(user_id=user_id, channel_id=channel_id, scope=scope)
+
 
 def build_memory_service() -> MemoryService:
     # Default: try LlamaIndex-backed service; fallback to legacy on any issue
@@ -233,4 +280,3 @@ def build_memory_service() -> MemoryService:
         fb = FallbackMemoryService()
         fb.ensure()
         return fb
-

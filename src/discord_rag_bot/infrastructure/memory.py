@@ -123,6 +123,53 @@ def load_slice(*, user_id: int, channel_id: Optional[int], limit: int = 8) -> Me
     return asyncio.run(run())
 
 
+def clear_channel(*, user_id: int, channel_id: int) -> int:
+    async def run() -> int:
+        conn = await asyncpg.connect(_dsn())
+        try:
+            await _ensure_async(conn)
+            res = await conn.execute(
+                """
+                DELETE FROM bot_memory
+                WHERE user_id=$1 AND channel_id=$2 AND role IN ('user','assistant')
+                """,
+                int(user_id),
+                int(channel_id),
+            )
+            # res like 'DELETE <n>'
+            try:
+                return int(str(res).split()[-1])
+            except Exception:
+                return 0
+        finally:
+            await conn.close()
+
+    return asyncio.run(run())
+
+
+def clear_all(*, user_id: int) -> int:
+    async def run() -> int:
+        conn = await asyncpg.connect(_dsn())
+        try:
+            await _ensure_async(conn)
+            res = await conn.execute(
+                """
+                DELETE FROM bot_memory
+                WHERE user_id=$1
+                """,
+                int(user_id),
+            )
+            try:
+                return int(str(res).split()[-1])
+            except Exception:
+                return 0
+        finally:
+            await conn.close()
+
+    return asyncio.run(run())
+
+
+
 def update_summary_with_ai(*, current_summary: Optional[str], user_text: str, bot_answer: str, answer_llm: callable) -> Optional[str]:
     """Use the LLM to keep a concise user memory summary.
 
@@ -145,4 +192,3 @@ def update_summary_with_ai(*, current_summary: Optional[str], user_text: str, bo
         return updated.strip()
     except Exception:
         return None
-
