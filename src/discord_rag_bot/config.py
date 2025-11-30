@@ -118,6 +118,9 @@ class Settings(BaseSettings):
     credit_est_output_tokens: int = 600
     credit_per_1k_tokens: float = 1.0
 
+    # Tools
+    tools_auto_enable: bool = True  # let the LLM auto-plan tool usage from user text
+
     @property
     def db(self) -> Db:
         if not all([self.pg_host, self.pg_user, self.pg_password, self.pg_database]):

@@ -13,6 +13,7 @@ from ..infrastructure.gating import should_use_rag
 from ..infrastructure.language import get_language_hint
 from rag_core.metrics import discord_messages_processed_total, rag_queries_total
 from ..infrastructure.tool_invocation import extract_tool_call, can_run_tools_for_user
+from ..infrastructure.tool_planner import maybe_execute_tool_from_text
 from ..infrastructure.credits import estimate_credits_for_question, pre_authorize, adjust_usage, compute_user_policy
 from ..infrastructure.permissions import is_admin_member
 
@@ -87,6 +88,14 @@ class ChatListenerCog(commands.Cog):
         if not question:
             # nothing to ask
             return
+
+        # Before answering, let the LLM decide if a tool should be triggered (admin-only)
+        try:
+            handled = await maybe_execute_tool_from_text(self.bot, message, question)
+            if handled:
+                return
+        except Exception:
+            pass
 
         def _compose_prompt(base: str | None, mem_summary: str | None, recent: list[tuple[str, str]]) -> str:
             from ..config import settings as _settings
