@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, List, Optional
+from typing import Iterable, List, Optional, Dict, Any
 import os
 import tempfile
 import subprocess
@@ -101,3 +101,123 @@ class GitHubOrgSource(IngestionSource):
             page += 1
         log.info("Discovered %d repos in org=%s", len(urls), self.org)
         return urls
+
+
+@dataclass
+class GitHubIssuesSource(IngestionSource):
+    """Stream GitHub issues (optionally with comments) of a repository as IngestItems.
+
+    repo_url: public HTTPS repo URL, e.g. https://github.com/ORG/REPO
+    state: all|open|closed (default: all)
+    labels: optional list of labels to filter by (subset)
+    include_comments: include issue comments in the text
+    token: optional GitHub token; if None uses env GITHUB_TOKEN when present
+    """
+
+    repo_url: str
+    state: str = "all"
+    labels: Optional[List[str]] = None
+    include_comments: bool = True
+    token: Optional[str] = None
+
+    def _headers(self) -> Dict[str, str]:
+        h = {"Accept": "application/vnd.github+json"}
+        tok = self.token or os.environ.get("GITHUB_TOKEN")
+        if tok:
+            h["Authorization"] = f"Bearer {tok}"
+        return h
+
+    def _owner_repo(self) -> tuple[str, str]:
+        # Parse https://github.com/owner/repo[.git]
+        parts = self.repo_url.rstrip("/").split("/")
+        owner, repo = parts[-2], parts[-1]
+        if repo.endswith(".git"):
+            repo = repo[:-4]
+        return owner, repo
+
+    def _list_issues(self) -> List[Dict[str, Any]]:
+        owner, repo = self._owner_repo()
+        params: Dict[str, Any] = {"state": self.state or "all", "per_page": 100}
+        if self.labels:
+            params["labels"] = ",".join(self.labels)
+        out: List[Dict[str, Any]] = []
+        page = 1
+        while True:
+            params["page"] = page
+            r = requests.get(
+                f"https://api.github.com/repos/{owner}/{repo}/issues",
+                headers=self._headers(),
+                params=params,
+                timeout=60,
+            )
+            r.raise_for_status()
+            data = r.json()
+            if not data:
+                break
+            for it in data:
+                # Exclude pull requests (GH returns them in issues API when 'pull_request' key exists)
+                if "pull_request" in it:
+                    continue
+                out.append(it)
+            page += 1
+        return out
+
+    def _list_comments(self, number: int) -> List[Dict[str, Any]]:
+        if not self.include_comments:
+            return []
+        owner, repo = self._owner_repo()
+        out: List[Dict[str, Any]] = []
+        page = 1
+        while True:
+            r = requests.get(
+                f"https://api.github.com/repos/{owner}/{repo}/issues/{number}/comments",
+                headers=self._headers(),
+                params={"per_page": 100, "page": page},
+                timeout=60,
+            )
+            r.raise_for_status()
+            data = r.json()
+            if not data:
+                break
+            out.extend(data)
+            page += 1
+        return out
+
+    def stream(self) -> Iterable[IngestItem]:
+        log = logging.getLogger(__name__)
+        issues = self._list_issues()
+        owner, repo = self._owner_repo()
+        repo_display = f"https://github.com/{owner}/{repo}"
+        for iss in issues:
+            number = int(iss.get("number"))
+            title = iss.get("title") or ""
+            body = iss.get("body") or ""
+            html_url = iss.get("html_url") or f"{repo_display}/issues/{number}"
+            labels = [lb.get("name") for lb in (iss.get("labels") or []) if lb and isinstance(lb, dict)]
+            state = iss.get("state") or ""
+            # Fetch comments if enabled
+            comments_text = ""
+            if self.include_comments and int(iss.get("comments") or 0) > 0:
+                try:
+                    comments = self._list_comments(number)
+                    if comments:
+                        parts: List[str] = ["\n\n--- Kommentare ---"]
+                        for c in comments:
+                            au = (c.get("user") or {}).get("login") or ""
+                            tx = c.get("body") or ""
+                            parts.append(f"[ {au} ]\n{tx}")
+                        comments_text = "\n\n".join(parts)
+                except Exception:
+                    pass
+            text = f"{title}\n\n{body}{comments_text}"
+            checksum = hashlib.sha256(text.encode("utf-8", errors="ignore")).hexdigest()
+            doc_id = f"{repo_display}#issue-{number}"
+            metadata = {
+                "repo": repo_display,
+                "issue_number": number,
+                "title": title,
+                "state": state,
+                "labels": labels,
+                "source_url": html_url,
+            }
+            yield IngestItem(doc_id=doc_id, text=text, metadata=metadata, checksum=checksum)

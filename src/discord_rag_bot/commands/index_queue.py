@@ -10,7 +10,7 @@ from ..util.text import clip_discord_message
 from ..config import settings
 from rag_core.ingestion.web import UrlSource, WebsiteCrawlerSource
 from rag_core.ingestion.web import SitemapSource
-from rag_core.ingestion.github import GitRepoSource, GitHubOrgSource
+from rag_core.ingestion.github import GitRepoSource, GitHubOrgSource, GitHubIssuesSource
 from rag_core.ingestion.filesystem import FilesystemSource
 from rag_core.ingestion.chunked import ChunkingSource
 from rag_core.etl.artifacts import LocalArtifactStore
@@ -117,6 +117,40 @@ class IndexQueueCog(commands.Cog):
             pass
         msg = await interaction.channel.send(f"Job #{job_id}: queued (github repo, manifest={key})")  # type: ignore[union-attr]
         await interaction.followup.send(f"Queued job #{job_id} for repo {repo}", ephemeral=True)
+        self.bot.loop.create_task(self._watch_job(msg, job_id))
+
+    @github.command(name="issues", description="Queue GitHub Issues eines Repos für das RAG")
+    @admin_check.__func__()
+    @app_commands.describe(
+        repo="GitHub repo URL (z. B. https://github.com/ORG/REPO)",
+        state="Filter: all|open|closed (default: all)",
+        labels="Kommagetrennte Labels (Subset-Filter)",
+        include_comments="Kommentare mit indizieren",
+        chunk_size="Optional chunk size (characters)",
+        chunk_overlap="Optional chunk overlap (characters)",
+    )
+    async def github_issues(
+        self,
+        interaction: discord.Interaction,
+        repo: str,
+        state: str = "all",
+        labels: Optional[str] = None,
+        include_comments: bool = True,
+        chunk_size: Optional[int] = None,
+        chunk_overlap: Optional[int] = 200,
+    ):
+        await interaction.response.defer(ephemeral=True)
+        await interaction.followup.send("Building manifest (GitHub issues)…", ephemeral=True)
+        src: object = GitHubIssuesSource(repo_url=repo, state=state, labels=_split_list(labels), include_comments=include_comments)
+        if chunk_size:
+            src = ChunkingSource(source=src, chunk_size=chunk_size or 0, overlap=chunk_overlap or 200)  # type: ignore[arg-type]
+        manifest = await __import__("asyncio").to_thread(build_manifest, src)  # type: ignore[arg-type]
+        store = self._artifact_store()
+        key = store.put_manifest(manifest)
+        payload = {"artifact_key": key}
+        job_id = await self.bot.services.job_repo.enqueue("ingest", payload)  # type: ignore[attr-defined]
+        msg = await interaction.channel.send(f"Job #{job_id}: queued (github issues {repo}, manifest={key})")  # type: ignore[union-attr]
+        await interaction.followup.send(f"Queued job #{job_id} for issues in {repo}", ephemeral=True)
         self.bot.loop.create_task(self._watch_job(msg, job_id))
 
     @github.command(name="org", description="Queue all repos in a GitHub org for indexing")
@@ -314,6 +348,22 @@ class IndexQueueCog(commands.Cog):
             pass
         msg = await interaction.channel.send(f"Job #{job_id}: queued (checksum github repo, manifest={key})")  # type: ignore[union-attr]
         await interaction.followup.send(f"Queued checksum-update job #{job_id} for repo {repo}", ephemeral=True)
+        self.bot.loop.create_task(self._watch_job(msg, job_id))
+
+    @checksum.command(name="github_issues", description="Checksum-Update nur für GitHub Issues eines Repos")
+    @admin_check.__func__()
+    @app_commands.describe(repo="GitHub repo URL", state="all|open|closed", labels="Labels", include_comments="Kommentare einbeziehen")
+    async def checksum_github_issues(self, interaction: discord.Interaction, repo: str, state: str = "all", labels: Optional[str] = None, include_comments: bool = True):
+        await interaction.response.defer(ephemeral=True)
+        await interaction.followup.send("Building manifest (GitHub issues)…", ephemeral=True)
+        src = GitHubIssuesSource(repo_url=repo, state=state, labels=_split_list(labels), include_comments=include_comments)
+        manifest = await __import__("asyncio").to_thread(build_manifest, src)
+        store = self._artifact_store()
+        key = store.put_manifest(manifest)
+        payload = {"artifact_key": key}
+        job_id = await self.bot.services.job_repo.enqueue("checksum_update", payload)  # type: ignore[attr-defined]
+        msg = await interaction.channel.send(f"Job #{job_id}: queued (checksum github issues, manifest={key})")  # type: ignore[union-attr]
+        await interaction.followup.send(f"Queued checksum-update job #{job_id} for issues in {repo}", ephemeral=True)
         self.bot.loop.create_task(self._watch_job(msg, job_id))
 
     @checksum.command(name="local_dir", description="Queue checksum-only update for a local directory")
