@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from dataclasses import dataclass
 from typing import Any, Dict, Optional, List
 from datetime import datetime
 
 import asyncpg
-from asyncpg.types import Json
 
 from .types import Db
 
@@ -67,7 +67,7 @@ class JobStore:
             row = await conn.fetchrow(
                 f"INSERT INTO {self.table} (type, payload) VALUES ($1, $2) RETURNING id",
                 job_type,
-                Json(payload),
+                json.dumps(payload),
             )
             return int(row["id"])  # type: ignore[index]
         finally:
@@ -104,10 +104,16 @@ class JobStore:
                     )
                     if not row:
                         return None
+                    payload = row["payload"]
+                    if isinstance(payload, str):
+                        try:
+                            payload = json.loads(payload)
+                        except Exception:
+                            payload = {"_raw": payload}
                     return Job(
                         id=row["id"],
                         type=row["type"],
-                        payload=row["payload"],
+                        payload=payload,
                         status=row["status"],
                         attempts=row["attempts"],
                         error=row["error"],
@@ -137,11 +143,17 @@ class JobStore:
                 )
             out: List[Job] = []
             for r in rows:
+                payload = r["payload"]
+                if isinstance(payload, str):
+                    try:
+                        payload = json.loads(payload)
+                    except Exception:
+                        payload = {"_raw": payload}
                 out.append(
                     Job(
                         id=r["id"],
                         type=r["type"],
-                        payload=r["payload"],
+                        payload=payload,
                         status=r["status"],
                         attempts=r["attempts"],
                         error=r["error"],
@@ -164,10 +176,16 @@ class JobStore:
             )
             if not r:
                 return None
+            payload = r["payload"]
+            if isinstance(payload, str):
+                try:
+                    payload = json.loads(payload)
+                except Exception:
+                    payload = {"_raw": payload}
             return Job(
                 id=r["id"],
                 type=r["type"],
-                payload=r["payload"],
+                payload=payload,
                 status=r["status"],
                 attempts=r["attempts"],
                 error=r["error"],
