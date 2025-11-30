@@ -8,7 +8,8 @@ from discord.ext import commands
 
 from ..util.text import clip_discord_message
 from rag_core import RagResult
-from ..infrastructure/config_store import load_prompt_effective
+from ..infrastructure.config_store import load_prompt_effective
+from ..infrastructure.gating import should_use_rag
 
 
 class ChatListenerCog(commands.Cog):
@@ -73,17 +74,42 @@ class ChatListenerCog(commands.Cog):
             # nothing to ask
             return
 
-        def run_query() -> RagResult:
+        def run_query() -> tuple[str, list[str]]:
             prompt = load_prompt_effective(message.guild.id if message.guild else None, message.channel.id)
-            return self.bot.services.rag.query(question, system_prompt=prompt)  # type: ignore[attr-defined]
+            # 1) Heuristik: Smalltalk etc. ohne teures Retrieval beantworten
+            pre = should_use_rag(
+                question,
+                guild_name=message.guild.name if message.guild else None,
+                channel_name=message.channel.name if hasattr(message.channel, "name") else None,
+                best_score=None,
+                sources_count=0,
+            )
+            if not pre:
+                ans = self.bot.services.rag.answer_llm(question, system_prompt=prompt)  # type: ignore[attr-defined]
+                return ans, []
+
+            # 2) Wenn Heuristik RAG nahelegt: Retrieval ausführen und mit Score entscheiden
+            res = self.bot.services.rag.query(question, system_prompt=prompt)  # type: ignore[attr-defined]
+            use_rag = should_use_rag(
+                question,
+                guild_name=message.guild.name if message.guild else None,
+                channel_name=message.channel.name if hasattr(message.channel, "name") else None,
+                best_score=res.best_score,
+                score_kind=res.score_kind,
+                sources_count=len(res.sources),
+            )
+            if use_rag:
+                return str(res.answer), res.sources
+            else:
+                ans = self.bot.services.rag.answer_llm(question, system_prompt=prompt)  # type: ignore[attr-defined]
+                return ans, []
 
         # Send friendly placeholder reply and then edit when ready
         placeholder_msg = await message.reply("🧠 Einen kleinen Moment – ich suche passende Informationen und schreibe die Antwort …")
-        result = await asyncio.to_thread(run_query)
-
-        text = result.answer
-        if result.sources:
-            text += "\n\nSources:\n" + "\n".join(f"- {s}" for s in result.sources)
+        answer, sources = await asyncio.to_thread(run_query)
+        text = answer
+        if sources:
+            text += "\n\nSources:\n" + "\n".join(f"- {s}" for s in sources)
 
         try:
             await placeholder_msg.edit(content=clip_discord_message(text))

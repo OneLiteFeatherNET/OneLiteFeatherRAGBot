@@ -36,6 +36,87 @@ class Settings(BaseSettings):
     queue_watch_poll_sec: float = 5.0
     # ETL staging directory (for manifests)
     etl_staging_dir: str = ".staging"
+    # Job backend selection: postgres (default) | redis | rabbitmq
+    job_backend: str = "postgres"
+    # Redis configuration (optional; used when job_backend=redis)
+    redis_url: Optional[str] = None  # e.g., redis://localhost:6379/0
+    redis_namespace: str = "rag"
+    # RabbitMQ configuration (optional; used when job_backend=rabbitmq)
+    rabbitmq_url: Optional[str] = None  # e.g., amqp://user:pass@localhost:5672/
+    rabbitmq_queue: str = "rag_jobs"
+    # RAG gating / mode
+    rag_mode: str = "auto"  # auto|rag|llm
+    rag_gate_strategy: str = "llm"  # llm|heuristic|hybrid
+    rag_min_question_len: int = 12
+    rag_keywords: list[str] = [
+        "onelitefeather",
+        "plugin",
+        "java",
+        "stacktrace",
+        "error",
+        "yaml",
+        "config.yml",
+        "plugin.yml",
+        ".yml",
+        ".java",
+        "github",
+        "release",
+        "build",
+        "gradle",
+        "maven",
+        "api",
+        "javadoc",
+    ]
+    # Gating threshold (optional). If set and RAG mode is auto, use RAG only when score passes this threshold.
+    rag_gate_threshold: float | None = None
+    # Smalltalk detection (configurable)
+    smalltalk_exact: list[str] = [
+        "hi",
+        "hallo",
+        "hey",
+        "moin",
+        "servus",
+        "danke",
+        "thx",
+        "ok",
+        "yo",
+        "lol",
+        "danke!",
+        "merci",
+        "bitte",
+        "gern",
+        "gerne",
+    ]
+    smalltalk_contains: list[str] = [
+        "guten morgen",
+        "guten abend",
+        "gute nacht",
+        "wie geht",
+        "wie läuft",
+        "alles gut",
+        "was geht",
+        "na?",
+        "moin moin",
+        "grüß",
+        "danke dir",
+        "vielen dank",
+        # Selbstbezug/Identität
+        "wer bist du",
+        "was bist du",
+        "wo bist du",
+        "wie heißt du",
+        "wie heisst du",
+        "dein name",
+        "was kannst du",
+        "kannst du mir helfen",
+        "hilf mir",
+        "hilfe",
+        "help",
+        "test bot",
+        "nur ein test",
+        "test?",
+        "ping",
+    ]
     # Ollama specific
     ollama_base_url: Optional[str] = None  # e.g. http://localhost:11434
     # vLLM (OpenAI-compatible) specific
