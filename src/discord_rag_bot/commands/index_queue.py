@@ -5,6 +5,8 @@ from typing import Optional, List
 import discord
 from discord import app_commands
 from discord.ext import commands
+import json
+from ..util.text import clip_discord_message
 
 
 def _split_list(csv: Optional[str]) -> Optional[List[str]]:
@@ -128,6 +130,41 @@ class IndexQueueCog(commands.Cog):
         }
         job_id = await self.bot.services.job_store.enqueue_async("ingest", payload)  # type: ignore[attr-defined]
         await interaction.followup.send(f"Queued job #{job_id} for path {repo_root}", ephemeral=True)
+
+    @queue.command(name="list", description="List recent indexing jobs")
+    @app_commands.describe(status="Optional status filter (pending|processing|completed|failed)", limit="Max number of jobs to list (default 20)")
+    async def list_jobs(self, interaction: discord.Interaction, status: Optional[str] = None, limit: int = 20):
+        await interaction.response.defer(ephemeral=True)
+        jobs = await self.bot.services.job_store.list_jobs_async(limit=limit, status=status)  # type: ignore[attr-defined]
+        if not jobs:
+            await interaction.followup.send("No jobs found.", ephemeral=True)
+            return
+        lines = []
+        for j in jobs:
+            created = j.created_at.isoformat() if j.created_at else "-"
+            lines.append(f"#{j.id} {j.status} {j.type} attempts={j.attempts} created={created}")
+        await interaction.followup.send(clip_discord_message("Jobs:\n" + "\n".join(lines)), ephemeral=True)
+
+    @queue.command(name="show", description="Show details of a job")
+    @app_commands.describe(job_id="Job ID")
+    async def show_job(self, interaction: discord.Interaction, job_id: int):
+        await interaction.response.defer(ephemeral=True)
+        j = await self.bot.services.job_store.get_job_async(job_id)  # type: ignore[attr-defined]
+        if not j:
+            await interaction.followup.send(f"Job #{job_id} not found.", ephemeral=True)
+            return
+        payload = json.dumps(j.payload, indent=2, ensure_ascii=False)
+        text = (
+            f"Job #{j.id} [{j.status}]\n"
+            f"type: {j.type}\n"
+            f"attempts: {j.attempts}\n"
+            f"created: {j.created_at}\n"
+            f"started: {j.started_at}\n"
+            f"finished: {j.finished_at}\n"
+            f"error: {j.error or '-'}\n\n"
+            f"payload:\n```json\n{payload}\n```"
+        )
+        await interaction.followup.send(clip_discord_message(text), ephemeral=True)
 
 
 async def setup(bot: commands.Bot):

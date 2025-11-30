@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
+from datetime import datetime
 
 import asyncpg
 from asyncpg.types import Json
@@ -16,6 +17,11 @@ class Job:
     type: str
     payload: Dict[str, Any]
     status: str
+    attempts: int
+    error: Optional[str]
+    created_at: Optional[datetime]
+    started_at: Optional[datetime]
+    finished_at: Optional[datetime]
 
 
 class JobStore:
@@ -93,16 +99,84 @@ class JobStore:
                         SET status='processing', started_at=NOW(), attempts = attempts + 1
                         FROM j
                         WHERE t.id = j.id
-                        RETURNING t.id, t.type, t.payload, t.status
+                        RETURNING t.id, t.type, t.payload, t.status, t.attempts, t.error, t.created_at, t.started_at, t.finished_at
                         """
                     )
                     if not row:
                         return None
-                    return Job(id=row["id"], type=row["type"], payload=row["payload"], status=row["status"])  # type: ignore[index]
+                    return Job(
+                        id=row["id"],
+                        type=row["type"],
+                        payload=row["payload"],
+                        status=row["status"],
+                        attempts=row["attempts"],
+                        error=row["error"],
+                        created_at=row["created_at"],
+                        started_at=row["started_at"],
+                        finished_at=row["finished_at"],
+                    )  # type: ignore[index]
             finally:
                 await conn.close()
 
         return asyncio.run(_run())
+
+    async def list_jobs_async(self, limit: int = 20, status: Optional[str] = None) -> List[Job]:
+        conn = await asyncpg.connect(self._dsn())
+        try:
+            await self._ensure_table_async(conn)
+            if status:
+                rows = await conn.fetch(
+                    f"SELECT id, type, payload, status, attempts, error, created_at, started_at, finished_at FROM {self.table} WHERE status=$1 ORDER BY id DESC LIMIT $2",
+                    status,
+                    limit,
+                )
+            else:
+                rows = await conn.fetch(
+                    f"SELECT id, type, payload, status, attempts, error, created_at, started_at, finished_at FROM {self.table} ORDER BY id DESC LIMIT $1",
+                    limit,
+                )
+            out: List[Job] = []
+            for r in rows:
+                out.append(
+                    Job(
+                        id=r["id"],
+                        type=r["type"],
+                        payload=r["payload"],
+                        status=r["status"],
+                        attempts=r["attempts"],
+                        error=r["error"],
+                        created_at=r["created_at"],
+                        started_at=r["started_at"],
+                        finished_at=r["finished_at"],
+                    )
+                )
+            return out
+        finally:
+            await conn.close()
+
+    async def get_job_async(self, job_id: int) -> Optional[Job]:
+        conn = await asyncpg.connect(self._dsn())
+        try:
+            await self._ensure_table_async(conn)
+            r = await conn.fetchrow(
+                f"SELECT id, type, payload, status, attempts, error, created_at, started_at, finished_at FROM {self.table} WHERE id=$1",
+                job_id,
+            )
+            if not r:
+                return None
+            return Job(
+                id=r["id"],
+                type=r["type"],
+                payload=r["payload"],
+                status=r["status"],
+                attempts=r["attempts"],
+                error=r["error"],
+                created_at=r["created_at"],
+                started_at=r["started_at"],
+                finished_at=r["finished_at"],
+            )
+        finally:
+            await conn.close()
 
     def complete(self, job_id: int) -> None:
         async def _run() -> None:
