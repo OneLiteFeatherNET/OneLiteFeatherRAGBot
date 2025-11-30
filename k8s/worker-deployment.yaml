@@ -23,6 +23,18 @@ spec:
                 name: discord-rag-config
             - secretRef:
                 name: discord-rag-secrets
+          env:
+            - name: APP_HEALTH_HTTP_PORT
+              value: "8080"
           command: ["rag-run-queue"]
           args: ["--poll", "5"]
-
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: 500m
+              memory: 1024Mi
+          readinessProbe:
+            exec:
+              command: ["/bin/sh", "-c", "# simple readiness: exit 0"]

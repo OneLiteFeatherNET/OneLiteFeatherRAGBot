@@ -13,6 +13,10 @@ spec:
     metadata:
       labels:
         app: discord-rag-bot
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
     spec:
       containers:
         - name: bot
@@ -23,6 +27,9 @@ spec:
                 name: discord-rag-config
             - secretRef:
                 name: discord-rag-secrets
+          env:
+            - name: APP_HEALTH_HTTP_PORT
+              value: "8080"
           ports:
             - name: http
               containerPort: 8080
@@ -38,6 +45,13 @@ spec:
               port: http
             initialDelaySeconds: 10
             periodSeconds: 20
+          resources:
+            requests:
+              cpu: 300m
+              memory: 512Mi
+            limits:
+              cpu: 600m
+              memory: 1024Mi
           command: ["discord-rag-bot"]
 ---
 apiVersion: v1
@@ -53,4 +67,3 @@ spec:
     - name: http
       port: 80
       targetPort: http
-

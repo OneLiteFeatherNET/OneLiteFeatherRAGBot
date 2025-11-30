@@ -13,6 +13,13 @@ Services
 - `worker`: `rag-run-queue` consuming RabbitMQ jobs while Postgres keeps progress/status/history for `/queue list/show` and metrics.
 - Optional `ollama` container for local LLM/embeddings (port 11434) when `APP_AI_PROVIDER=ollama`.
 
+Scaling
+- Deploying to Kubernetes: use the provided bot and worker deployments plus the dedicated HPAs (`k8s/bot-hpa.yaml`, `k8s/worker-hpa.yaml`).
+- The bot exposes `/metrics`, `/healthz`, `/readyz` on `APP_HEALTH_HTTP_PORT` so k8s liveness/readiness and Prometheus scraping work.
+- Workers will auto-scale through RabbitMQ and the `rag-run-queue` HPA; configure RabbitMQ + Postgres as a shared queue reference.
+
+
+
 Code Structure
 - `src/discord_rag_bot/` – application layer for the bot
   - `app.py` – entrypoint (`discord-rag-bot` script)
