@@ -166,10 +166,10 @@ class IndexQueueCog(commands.Cog):
         await interaction.followup.send(f"Queued job #{job_id} for issues in {repo}", ephemeral=True)
         self.bot.loop.create_task(self._watch_job(msg, job_id))
 
-    @github.command(name="org", description="Queue all repos in a GitHub org for indexing")
+    @github.command(name="org", description="Queue all repositories for a GitHub organization or user (name or URL)")
     @require_admin()
     @app_commands.describe(
-        org="GitHub organization name",
+        org="GitHub organization or user (name or URL)",
         visibility="Visibility filter (all|public|private)",
         include_archived="Include archived repos",
         topics="Comma-separated topics to filter (subset)",

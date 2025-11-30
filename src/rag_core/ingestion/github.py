@@ -12,7 +12,7 @@ import shutil
 import logging
 
 from .base import IngestionSource, IngestItem
-from github import Github, GithubException
+from github import Github
 from .filesystem import FilesystemSource, DEFAULT_EXTS
 
 
@@ -110,21 +110,47 @@ class GitHubOrgSource(IngestionSource):
                 token=self.token,
             ).stream()
 
+    def _org_name(self) -> str:
+        """Normalize org identifier; accept plain name or GitHub URL.
+
+        Examples:
+        - "OneLiteFeatherNET"
+        - "https://github.com/OneLiteFeatherNET"
+        - "https://github.com/orgs/OneLiteFeatherNET"
+        """
+        val = (self.org or "").strip()
+        if val.startswith("http://") or val.startswith("https://"):
+            try:
+                from urllib.parse import urlparse
+                p = urlparse(val)
+                parts = [c for c in (p.path or "").split("/") if c]
+                if not parts:
+                    return val
+                # URLs can be /ORG or /orgs/ORG
+                if parts[0].lower() == "orgs" and len(parts) >= 2:
+                    return parts[1]
+                return parts[0]
+            except Exception:
+                return val
+        return val
+
     def _list_repo_urls(self) -> List[str]:
         log = logging.getLogger(__name__)
         token = self.token or os.getenv("GITHUB_TOKEN")
         gh = Github(login_or_token=token) if token else Github()
-        # Try organization first; if not found, fallback to user namespace
+        ident = self._org_name()
+        # Try organization first; if not found (404), fallback to user namespace
         try:
-            org = gh.get_organization(self.org)
+            org = gh.get_organization(ident)
             repos = org.get_repos(type=self.visibility)
-        except GithubException.UnknownObjectException:
-            # Treat identifier as a user account
-            user = gh.get_user(self.org)
-            try:
-                repos = user.get_repos()  # visibility filter may not be supported uniformly
-            except Exception:
+        except Exception as e:
+            status = getattr(e, "status", None)
+            msg = str(e)
+            if status == 404 or "Not Found" in msg:
+                user = gh.get_user(ident)
                 repos = user.get_repos()
+            else:
+                raise
         urls: List[str] = []
         for repo in repos:
             try:

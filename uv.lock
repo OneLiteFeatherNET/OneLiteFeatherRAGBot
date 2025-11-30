@@ -593,7 +593,7 @@ wheels = [
 
 [[package]]
 name = "discord-rag-bot"
-version = "1.0.0"
+version = "1.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "aio-pika" },
