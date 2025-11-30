@@ -235,3 +235,73 @@ def load_prompt_effective(guild_id: int | None, channel_id: int | None) -> str |
     if backend == "db":
         return _db_load_effective(guild_id, channel_id)
     return _file_load_prompt_effective(guild_id, channel_id)
+
+
+def migrate_prompts_files_to_db(delete_files: bool = True) -> dict:
+    """Migrate file-based prompts (.staging) into DB rag_settings.
+
+    Returns statistics dict with counts per scope. If APP_CONFIG_BACKEND is not 'db',
+    the function still writes into DB to prepare a switch.
+    """
+    # Ensure table exists
+    ensure_store()
+    root = Path(getattr(settings, "etl_staging_dir", ".staging"))
+    stats = {"global": 0, "guild": 0, "channel": 0, "deleted": False}
+
+    # Global legacy system prompt
+    sp = root / "system_prompt.txt"
+    if sp.exists():
+        try:
+            text = sp.read_text(encoding="utf-8")
+            _db_save("global", None, "system_prompt", text)
+            stats["global"] += 1
+            if delete_files:
+                sp.unlink(missing_ok=True)
+        except Exception:
+            pass
+
+    # Scoped prompts
+    pr = root / "prompts"
+    if pr.exists():
+        for p in pr.glob("*.txt"):
+            name = p.name
+            try:
+                text = p.read_text(encoding="utf-8")
+            except Exception:
+                continue
+            if name == "global.txt":
+                _db_save("global", None, "system_prompt", text)
+                stats["global"] += 1
+            elif name.startswith("guild-") and name.endswith(".txt"):
+                try:
+                    gid = int(name[len("guild-") : -len(".txt")])
+                except Exception:
+                    gid = None
+                if gid is not None:
+                    _db_save("guild", gid, "system_prompt", text)
+                    stats["guild"] += 1
+            elif name.startswith("channel-") and name.endswith(".txt"):
+                try:
+                    cid = int(name[len("channel-") : -len(".txt")])
+                except Exception:
+                    cid = None
+                if cid is not None:
+                    _db_save("channel", cid, "system_prompt", text)
+                    stats["channel"] += 1
+            if delete_files:
+                try:
+                    p.unlink(missing_ok=True)
+                except Exception:
+                    pass
+        # Remove prompts dir if empty and delete_files
+        if delete_files:
+            try:
+                next(pr.iterdir())
+            except StopIteration:
+                try:
+                    pr.rmdir()
+                except Exception:
+                    pass
+
+    stats["deleted"] = bool(delete_files)
+    return stats

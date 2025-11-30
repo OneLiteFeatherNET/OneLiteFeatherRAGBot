@@ -13,6 +13,7 @@ from ..infrastructure.config_store import (
     load_prompt_effective,
 )
 from ..infrastructure.ai import build_ai_provider
+from ..infrastructure.config_store import migrate_prompts_files_to_db
 
 
 class ConfigCog(commands.Cog):
@@ -95,6 +96,21 @@ class ConfigCog(commands.Cog):
             await interaction.followup.send("No channel/guild override; using global/ENV (if any).", ephemeral=True)
         else:
             await interaction.followup.send(f"Effective prompt for this channel:\n```\n{text}\n```", ephemeral=True)
+
+    @group.command(name="migrate_prompts_to_db", description="Migrate .staging prompts into DB settings (admin)")
+    @admin_check.__func__()
+    @app_commands.describe(delete_files="Delete files after successful migration")
+    async def migrate_prompts_to_db(self, interaction: discord.Interaction, delete_files: bool = True):
+        await interaction.response.defer(ephemeral=True)
+        stats = migrate_prompts_files_to_db(delete_files=delete_files)
+        # Reconfigure LLM (prompt might change)
+        ai = build_ai_provider()
+        ai.configure_global()
+        self.bot.services.rag.ai_provider = ai  # type: ignore[attr-defined]
+        await interaction.followup.send(
+            f"Migration done: global={stats.get('global',0)} guild={stats.get('guild',0)} channel={stats.get('channel',0)} deleted={stats.get('deleted', False)}",
+            ephemeral=True,
+        )
 
 
 async def setup(bot: commands.Bot):
