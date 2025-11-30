@@ -5,7 +5,9 @@ from ..infrastructure.ai import build_ai_provider
 from .client import RagBot
 from .services import BotServices
 from rag_core import RAGService, VectorStoreConfig, RagConfig
-from rag_core.jobs import JobStore
+import asyncio
+from rag_core.db.postgres_jobs import PostgresJobRepository
+from rag_core.db.base import JobRepository
 from rag_core.tools.registry import ToolsRegistry
 
 
@@ -26,10 +28,11 @@ def build_services() -> BotServices:
         ),
         ai_provider=ai,
     )
-    jobs = JobStore(db=settings.db)
-    jobs.ensure_table()
+    job_repo: JobRepository = PostgresJobRepository(db=settings.db)
+    # Ensure schema exists
+    asyncio.run(job_repo.ensure())
     tools = ToolsRegistry()
-    return BotServices(rag=rag, job_store=jobs, tools=tools)
+    return BotServices(rag=rag, job_repo=job_repo, tools=tools)
 
 
 def build_bot() -> RagBot:
