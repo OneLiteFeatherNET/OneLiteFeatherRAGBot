@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
+import logging
 
 from llama_index.core import StorageContext, VectorStoreIndex
 from llama_index.core.schema import Document
@@ -51,6 +52,7 @@ class RAGService:
         rag_config: RagConfig | None = None,
         ai_provider: AIProvider | None = None,
     ) -> None:
+        self._log = logging.getLogger(__name__)
         self.vs_config = vs_config
         self.rag_config = rag_config or RagConfig()
         self.ai_provider = ai_provider
@@ -72,6 +74,7 @@ class RAGService:
             storage_context=self._storage_context,
         )
         self._qe = self._index.as_query_engine(similarity_top_k=self.rag_config.top_k)
+        self._log.info("RAGService initialized: table=%s embed_dim=%s top_k=%s", vs_config.table_name, vs_config.embed_dim, self.rag_config.top_k)
         self._checksums = ChecksumStore(db=vs_config.db)
 
     def query(self, question: str) -> RagResult:
@@ -84,12 +87,15 @@ class RAGService:
         repo_url: str,
         required_exts: Iterable[str] | None = None,
     ) -> None:
+        self._log.info("Indexing directory: root=%s url=%s", repo_root, repo_url)
         source = FilesystemSource(repo_root=repo_root, repo_url=repo_url, exts=list(required_exts) if required_exts else None)
         self.index_items(source.stream())
 
     def index_items(self, items: Iterable[IngestItem]) -> None:
         """Index items with checksum skipping using a checksum store."""
+        self._log.info("Loading checksum map ...")
         existing = self._checksums.load_map()
+        self._log.info("Loaded %d checksum entries", len(existing))
 
         to_index: list[Document] = []
         updates: list[ChecksumRecord] = []
@@ -102,6 +108,7 @@ class RAGService:
             updates.append(ChecksumRecord(doc_id=item.doc_id, checksum=item.checksum))
 
         if not to_index:
+            self._log.info("No changes detected. Skipping indexing.")
             return
 
         VectorStoreIndex.from_documents(
@@ -109,7 +116,9 @@ class RAGService:
             storage_context=self._storage_context,
             show_progress=True,
         )
+        self._log.info("Indexed %d documents (chunks). Updating checksums ...", len(to_index))
         self._checksums.upsert_many(updates)
+        self._log.info("Checksum update completed (%d records)", len(updates))
 
     @staticmethod
     def _extract_sources(response) -> list[str]:

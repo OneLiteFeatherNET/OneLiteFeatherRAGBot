@@ -11,8 +11,12 @@ class Settings(BaseSettings):
     llm_model: str = "gpt-4.1-mini"
     embed_model: str = "text-embedding-3-small"
     temperature: float = 0.1
+    embed_provider: str = "openai"  # openai|ollama
     # Ollama specific
     ollama_base_url: Optional[str] = None  # e.g. http://localhost:11434
+    # vLLM (OpenAI-compatible) specific
+    vllm_base_url: Optional[str] = None  # e.g. http://localhost:8000/v1
+    vllm_api_key: Optional[str] = None
     table_name: str = "rag_chunks"
     embed_dim: int = 1536
     top_k: int = 6

@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from typing import Dict, Iterable, Tuple
+from typing import Dict, Iterable
+import logging
 
 import asyncpg
 
@@ -19,6 +20,7 @@ class ChecksumStore:
     def __init__(self, db: Db, table: str = "rag_checksums") -> None:
         self.db = db
         self.table = table
+        self._log = logging.getLogger(__name__)
 
     def _dsn(self) -> str:
         return f"postgresql://{self.db.user}:{self.db.password}@{self.db.host}:{self.db.port}/{self.db.database}"
@@ -54,7 +56,9 @@ class ChecksumStore:
             finally:
                 await conn.close()
 
-        return asyncio.run(_run())
+        m = asyncio.run(_run())
+        self._log.debug("Loaded checksum map entries: %d", len(m))
+        return m
 
     def upsert_many(self, records: Iterable[ChecksumRecord]) -> None:
         async def _run():
@@ -76,4 +80,3 @@ class ChecksumStore:
                 await conn.close()
 
         asyncio.run(_run())
-

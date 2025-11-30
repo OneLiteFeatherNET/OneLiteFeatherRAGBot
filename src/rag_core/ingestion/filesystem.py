@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, List
 import hashlib
+import logging
 
 from .base import IngestionSource, IngestItem
 
@@ -26,6 +27,8 @@ class FilesystemSource(IngestionSource):
     exts: List[str] | None = None
 
     def stream(self) -> Iterable[IngestItem]:
+        log = logging.getLogger(__name__)
+        log.info("Scanning filesystem: root=%s url=%s", self.repo_root, self.repo_url)
         exts = self.exts or DEFAULT_EXTS
         for p in self.repo_root.rglob("*"):
             if not p.is_file():

@@ -3,6 +3,7 @@ from .types import Db
 from .providers.base import AIProvider, AIConfig
 from .providers.openai_provider import OpenAIProvider
 from .providers.ollama_provider import OllamaProvider
+from .providers.vllm_provider import VLLMProvider
 
 __all__ = [
     "RAGService",
@@ -15,4 +16,5 @@ __all__ = [
     "AIConfig",
     "OpenAIProvider",
     "OllamaProvider",
+    "VLLMProvider",
 ]

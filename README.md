@@ -4,8 +4,9 @@ Discord RAG Bot (pgvector + LlamaIndex)
 Overview
 - Primary interface is a Discord bot that queries a Postgres/pgvector store directly — no REST layer.
 - Ingestion/Indexing is triggered via a Python CLI (one‑off or scheduled via cron).
-- Layered, maintainable architecture with a dedicated commands package and a provider abstraction (OpenAI or Ollama).
+- Layered, maintainable architecture with a dedicated commands package and a provider abstraction (OpenAI, Ollama, vLLM).
 - docker‑compose provided for local testing with Postgres/pgvector (and optional Ollama).
+  - vLLM support via OpenAI‑compatible provider (configure `APP_AI_PROVIDER=vllm`).
 
 Services
 - bot: Discord bot with direct access to pgvector.
@@ -50,14 +51,17 @@ Code Structure
   - `filesystem.py` – local directory source
   - `github.py` – GitHub repo/org sources (clone via git, list via API)
   - `composite.py` – combine multiple sources
+  - `chunked.py` – chunking wrapper for per‑chunk checksums
+  - `../chunking.py` – paragraph‑aware chunker utility
   
 
 Environment (APP_ prefix)
 - Bot: `APP_DISCORD_TOKEN`
 - DB: `APP_PG_HOST`, `APP_PG_PORT`, `APP_PG_USER`, `APP_PG_PASSWORD`, `APP_PG_DATABASE`
 - RAG: `APP_TABLE_NAME`, `APP_EMBED_DIM`, `APP_TOP_K`
-- Provider selection: `APP_AI_PROVIDER` (`openai`|`ollama`), `APP_LLM_MODEL`, `APP_EMBED_MODEL`, `APP_TEMPERATURE`, optional `APP_OLLAMA_BASE_URL`
+- Provider selection: `APP_AI_PROVIDER` (`openai`|`ollama`|`vllm`), `APP_LLM_MODEL`, `APP_EMBED_MODEL`, `APP_TEMPERATURE`, optional `APP_OLLAMA_BASE_URL`
 - OpenAI: `OPENAI_API_KEY` (when using `openai` provider)
+- vLLM: `APP_VLLM_BASE_URL`, optional `APP_VLLM_API_KEY`; choose embeddings via `APP_EMBED_PROVIDER` (`openai` or `ollama`).
 
 Quickstart (Docker Compose)
 1. Copy `.env.example` to `.env` and set required values.
@@ -66,6 +70,7 @@ Quickstart (Docker Compose)
    - Host: `uv run rag-index /path/to/repo https://github.com/ORG/repo`
    - Docker: `docker compose run --rm bot rag-index /data/repos/my-repo https://github.com/ORG/my-repo`
    - Config: `uv run rag-index --config ingest.yaml`
+   - Enable chunking: add `--chunk-size 2000 --chunk-overlap 200` or set in YAML (`chunk_size`, `chunk_overlap`)
 4. Use `/ask <question>` in Discord. The bot queries pgvector directly.
 
 Checksum‑based reindexing
@@ -83,6 +88,11 @@ Ollama (optional)
 - Compose starts `ollama` on port 11434.
 - Set `.env`: `APP_AI_PROVIDER=ollama`, `APP_LLM_MODEL=<e.g., llama3.1>`, `APP_EMBED_MODEL=<e.g., nomic-embed-text>`, `APP_OLLAMA_BASE_URL=http://ollama:11434`.
 - Ensure `APP_EMBED_DIM` matches the embedding model (e.g., 768 for `nomic-embed-text`).
+
+vLLM (optional)
+- Run a vLLM server exposing an OpenAI‑compatible API.
+- Set `.env`: `APP_AI_PROVIDER=vllm`, `APP_VLLM_BASE_URL=http://localhost:8000/v1`, `APP_LLM_MODEL=<served model>`.
+- Choose embeddings via `APP_EMBED_PROVIDER` (`openai` or `ollama`) and set the corresponding embedding model/config.
 
 Extending the Bot
 - Add a new file under `src/discord_rag_bot/commands/<name>.py` with a Cog and an `async def setup(bot)` function that adds the Cog.

@@ -7,6 +7,7 @@ import os
 import tempfile
 import subprocess
 import requests
+import logging
 
 from .base import IngestionSource, IngestItem
 from .filesystem import FilesystemSource, DEFAULT_EXTS
@@ -21,6 +22,7 @@ class GitRepoSource(IngestionSource):
     workdir: Optional[Path] = None
 
     def stream(self) -> Iterable[IngestItem]:
+        log = logging.getLogger(__name__)
         tmpdir_ctx = tempfile.TemporaryDirectory() if self.workdir is None else None
         root = self.workdir or Path(tmpdir_ctx.name)  # type: ignore[union-attr]
         repo_name = self.repo_url.rstrip("/").split("/")[-1].replace(".git", "")
@@ -31,6 +33,7 @@ class GitRepoSource(IngestionSource):
             if self.repo_url.startswith("https://") and "@" not in self.repo_url:
                 self.repo_url = self.repo_url.replace("https://", f"https://{self.token}:x-oauth-basic@")
         if not dest.exists():
+            log.info("Cloning repository: %s", self.repo_url)
             args = ["git", "clone", "--depth", "1"]
             if self.branch:
                 args += ["--branch", self.branch]
@@ -72,6 +75,7 @@ class GitHubOrgSource(IngestionSource):
             ).stream()
 
     def _list_repo_urls(self) -> List[str]:
+        log = logging.getLogger(__name__)
         headers = {"Accept": "application/vnd.github+json"}
         if self.token:
             headers["Authorization"] = f"Bearer {self.token}"
@@ -95,4 +99,5 @@ class GitHubOrgSource(IngestionSource):
                 if clone_url:
                     urls.append(clone_url)
             page += 1
+        log.info("Discovered %d repos in org=%s", len(urls), self.org)
         return urls
