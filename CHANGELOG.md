@@ -1,3 +1,16 @@
+## [1.2.0](https://github.com/OneLiteFeatherNET/OneLiteFeatherRAGBot/compare/v1.1.0...v1.2.0) (2025-11-30)
+
+### Features
+
+* **github:** add local-clone ingestion source and tool; add commit metadata toggle and GITHUB_TOKEN fallback to reduce rate limits ([3af35be](https://github.com/OneLiteFeatherNET/OneLiteFeatherRAGBot/commit/3af35beaeca871b97d446098a7097d1c1fed58f0))
+* **queue:** prefer per-repo jobs for /queue github org (local clone per repo), add force support across web and local commands ([6497308](https://github.com/OneLiteFeatherNET/OneLiteFeatherRAGBot/commit/6497308d2172319c4f51eb075f162b6fea1df268))
+* **tools:** planner advertises optional force:true in tool payloads for checksum-override reindex ([54c31e4](https://github.com/OneLiteFeatherNET/OneLiteFeatherRAGBot/commit/54c31e44fe6907fc951eadec7fda6e84f504f0a7))
+
+### Bug Fixes
+
+* **credits:** quote legacy reserved column name "limit" in SQL fallback to avoid Postgres syntax error ([1c2a326](https://github.com/OneLiteFeatherNET/OneLiteFeatherRAGBot/commit/1c2a326ed9570507f960050881d42a79702eea57))
+* **policy:** add missing import for decide_response_policy in chat listener ([5b24ae2](https://github.com/OneLiteFeatherNET/OneLiteFeatherRAGBot/commit/5b24ae2f994136bd5845d069149c6314dfd9b6a3))
+
 ## [1.1.0](https://github.com/OneLiteFeatherNET/OneLiteFeatherRAGBot/compare/v1.0.0...v1.1.0) (2025-11-30)
 
 ### Features
