@@ -6,7 +6,7 @@ from .config import settings
 from rag_core.db.base import JobRepository
 from rag_core.db.postgres_jobs import PostgresJobRepository
 from rag_core.db.rabbitmq_jobs import RabbitMQJobRepository
-from ..types import Db
+from rag_core.types import Db
 
 
 class JobRepoFactory:
