@@ -98,6 +98,9 @@ class Settings(BaseSettings):
     credit_role_ranks_by_name: dict[str, str] = {}
     # Map role ID (as string) -> rank (JSON), e.g.: {"123456": "gold"}
     credit_role_ranks_by_id: dict[str, str] = {}
+    # Roles with unlimited per-user credit (still respects global cap)
+    credit_unlimited_role_names: list[str] = []
+    credit_unlimited_role_ids: list[int] = []
     # Estimation: ~tokens per char and expected output tokens; 1 credit per 1k tokens by default
     credit_tokens_per_char: float = 0.25
     credit_est_output_tokens: int = 600

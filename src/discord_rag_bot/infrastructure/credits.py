@@ -36,6 +36,17 @@ async def _ensure_async(conn: asyncpg.Connection) -> None:
             used_credits INTEGER NOT NULL DEFAULT 0,
             updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
+        CREATE TABLE IF NOT EXISTS bot_credit_user_limits (
+            user_id BIGINT PRIMARY KEY,
+            limit INTEGER NOT NULL,
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        CREATE TABLE IF NOT EXISTS bot_credit_unlimited_roles (
+            role_id BIGINT PRIMARY KEY,
+            role_name TEXT,
+            guild_id BIGINT,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
         """
     )
 
@@ -185,3 +196,158 @@ def resolve_user_limit_from_roles(*, member_roles: list[tuple[int, str]]) -> int
         if isinstance(lim, int) and lim > max_limit:
             max_limit = lim
     return max_limit
+
+
+def has_unlimited_from_roles(*, member_roles: list[tuple[int, str]]) -> bool:
+    # From settings
+    names = set((settings.credit_unlimited_role_names or []))
+    ids = set(int(x) for x in (settings.credit_unlimited_role_ids or []))
+    for rid, name in member_roles:
+        if rid in ids:
+            return True
+        if name and name in names:
+            return True
+    # From DB
+    async def run() -> bool:
+        conn = await asyncpg.connect(_dsn())
+        try:
+            await _ensure_async(conn)
+            role_ids = [int(rid) for rid, _ in member_roles if rid]
+            if not role_ids:
+                return False
+            rows = await conn.fetch(
+                "SELECT role_id FROM bot_credit_unlimited_roles WHERE role_id = ANY($1::BIGINT[])",
+                role_ids,
+            )
+            return bool(rows)
+        finally:
+            await conn.close()
+
+    return asyncio.run(run())
+
+
+def get_user_limit_override(user_id: int) -> Optional[int]:
+    async def run() -> Optional[int]:
+        conn = await asyncpg.connect(_dsn())
+        try:
+            await _ensure_async(conn)
+            row = await conn.fetchrow("SELECT limit FROM bot_credit_user_limits WHERE user_id=$1", int(user_id))
+            return int(row[0]) if row else None
+        finally:
+            await conn.close()
+
+    return asyncio.run(run())
+
+
+def set_user_limit(user_id: int, limit: int) -> None:
+    async def run():
+        conn = await asyncpg.connect(_dsn())
+        try:
+            await _ensure_async(conn)
+            await conn.execute(
+                """
+                INSERT INTO bot_credit_user_limits(user_id, limit)
+                VALUES ($1, $2)
+                ON CONFLICT (user_id) DO UPDATE SET limit=EXCLUDED.limit, updated_at=NOW()
+                """,
+                int(user_id), int(limit)
+            )
+        finally:
+            await conn.close()
+
+    asyncio.run(run())
+
+
+def clear_user_limit(user_id: int) -> None:
+    async def run():
+        conn = await asyncpg.connect(_dsn())
+        try:
+            await _ensure_async(conn)
+            await conn.execute("DELETE FROM bot_credit_user_limits WHERE user_id=$1", int(user_id))
+        finally:
+            await conn.close()
+
+    asyncio.run(run())
+
+
+def add_unlimited_role(role_id: int, role_name: Optional[str], guild_id: Optional[int]) -> None:
+    async def run():
+        conn = await asyncpg.connect(_dsn())
+        try:
+            await _ensure_async(conn)
+            await conn.execute(
+                """
+                INSERT INTO bot_credit_unlimited_roles(role_id, role_name, guild_id)
+                VALUES ($1, $2, $3)
+                ON CONFLICT (role_id) DO UPDATE SET role_name=EXCLUDED.role_name, guild_id=EXCLUDED.guild_id
+                """,
+                int(role_id), role_name, int(guild_id) if guild_id else None
+            )
+        finally:
+            await conn.close()
+
+    asyncio.run(run())
+
+
+def remove_unlimited_role(role_id: int) -> None:
+    async def run():
+        conn = await asyncpg.connect(_dsn())
+        try:
+            await _ensure_async(conn)
+            await conn.execute("DELETE FROM bot_credit_unlimited_roles WHERE role_id=$1", int(role_id))
+        finally:
+            await conn.close()
+
+    asyncio.run(run())
+
+
+def list_unlimited_roles() -> list[tuple[int, Optional[str], Optional[int]]]:
+    async def run() -> list[tuple[int, Optional[str], Optional[int]]]:
+        conn = await asyncpg.connect(_dsn())
+        try:
+            await _ensure_async(conn)
+            rows = await conn.fetch("SELECT role_id, role_name, guild_id FROM bot_credit_unlimited_roles ORDER BY created_at")
+            out: list[tuple[int, Optional[str], Optional[int]]] = []
+            for r in rows:
+                out.append((int(r["role_id"]), r["role_name"], int(r["guild_id"]) if r["guild_id"] else None))
+            return out
+        finally:
+            await conn.close()
+
+    return asyncio.run(run())
+
+
+def get_usage(user_id: int) -> tuple[int, int]:
+    """Return (user_used, global_used) for current period."""
+    period = _period_start()
+
+    async def run() -> tuple[int, int]:
+        conn = await asyncpg.connect(_dsn())
+        try:
+            await _ensure_async(conn)
+            row_u = await conn.fetchrow("SELECT used_credits FROM bot_credits_user WHERE user_id=$1 AND period_start=$2", int(user_id), period)
+            row_g = await conn.fetchrow("SELECT used_credits FROM bot_credits_global WHERE period_start=$1", period)
+            return (int(row_u[0]) if row_u else 0, int(row_g[0]) if row_g else 0)
+        finally:
+            await conn.close()
+
+    return asyncio.run(run())
+
+
+def compute_user_policy(*, user_id: int, member_roles: list[tuple[int, str]], is_admin: bool) -> tuple[bool, int]:
+    """Return (unlimited, per_user_limit).
+
+    unlimited ignores per-user limit but still respects global cap.
+    """
+    # Admins unlimited by default
+    if is_admin:
+        return True, 10**9
+    if has_unlimited_from_roles(member_roles=member_roles):
+        return True, 10**9
+    # Per-user override
+    ul = get_user_limit_override(user_id)
+    if isinstance(ul, int):
+        return False, max(1, int(ul))
+    # Rank-based
+    limit = resolve_user_limit_from_roles(member_roles=member_roles)
+    return False, max(1, int(limit))

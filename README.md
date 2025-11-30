@@ -140,6 +140,15 @@ Memory commands
 - `/memory show [scope: channel|all] [user] [limit] [ephemeral]` – zeigt gespeichertes Gedächtnis (Zusammenfassung + letzte Schritte). Ohne `user` wird dein eigenes angezeigt. Andere Nutzer nur für Admins.
 - `/memory clear [scope: channel|all] [user] [confirm] [ephemeral]` – löscht Gedächtnis. Ohne `user` löscht du dein eigenes. Andere Nutzer nur für Admins. `confirm:true` erforderlich.
 
+Credits (Admin)
+- `/credits stats` – zeigt globale Nutzung und Cap (aktueller Monat)
+- `/credits show [user]` – zeigt Nutzung eines Nutzers
+- `/credits set-user-limit user:<user> limit:<n>` – setzt benutzerbezogenes Limit (überschreibt Rangregeln)
+- `/credits clear-user-limit user:<user>` – entfernt benutzerbezogenes Limit
+- `/credits add-unlimited-role role:<role>` – Rolle erhält unendliche Credits (globaler Cap gilt weiterhin)
+- `/credits remove-unlimited-role role:<role>` – entfernt unendliche Rolle
+- `/credits list-unlimited-roles` – listet unendliche Rollen
+
 License
 MIT — see `LICENSE`.
   - `run_queue.py` – queue worker (`rag-run-queue`) that processes jobs created from Discord
