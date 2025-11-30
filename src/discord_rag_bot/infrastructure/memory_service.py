@@ -120,6 +120,9 @@ class LlamaIndexMemoryService(MemoryService):
         return self._SQLChatStore is not None and self._ChatMemoryBuffer is not None
 
     def _dsn(self) -> str:
+        # Allow explicit DSN override for ChatStore; fallback to app DB
+        if getattr(settings, "chatstore_dsn", None):
+            return str(getattr(settings, "chatstore_dsn"))
         db = settings.db
         return f"postgresql://{db.user}:{db.password}@{db.host}:{db.port}/{db.database}"
 

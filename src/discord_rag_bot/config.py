@@ -45,9 +45,14 @@ class Settings(BaseSettings):
     # LlamaIndex docstore persistence (stores document/index metadata separate from vectors)
     docstore_persist: bool = True
     docstore_dir: str = ".staging/llama_storage"
+    # LlamaIndex docstore backend: disk|postgres (if postgres, use KV store in Postgres)
+    docstore_backend: str = "disk"
+    docstore_table: str = "llama_kv"
     # LlamaIndex IndexStore backend (where to store index structs): postgres|disk
     indexstore_backend: str = "postgres"
     indexstore_table: str = "llama_kv"
+    # ChatStore DSN override (defaults to application DB when not set)
+    chatstore_dsn: Optional[str] = None
     # S3 staging (optional, used when etl_staging_backend=s3)
     s3_staging_bucket: Optional[str] = None
     s3_staging_prefix: str = "rag-artifacts"
