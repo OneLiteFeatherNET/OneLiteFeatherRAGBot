@@ -7,6 +7,7 @@ from discord import app_commands
 from discord.ext import commands
 import json
 from ..util.text import clip_discord_message
+from ..config import settings
 
 
 def _split_list(csv: Optional[str]) -> Optional[List[str]]:
@@ -56,7 +57,7 @@ class IndexQueueCog(commands.Cog):
                     "type": "github_repo",
                     "repo": repo,
                     "branch": branch,
-                    "exts": _split_list(exts),
+                    "exts": _split_list(exts) or settings.ingest_exts,
                 }
             ],
             "chunk_size": chunk_size,
@@ -98,7 +99,7 @@ class IndexQueueCog(commands.Cog):
                     "visibility": visibility,
                     "include_archived": include_archived,
                     "topics": _split_list(topics),
-                    "exts": _split_list(exts),
+                    "exts": _split_list(exts) or settings.ingest_exts,
                     "branch": branch,
                 }
             ],
@@ -133,7 +134,7 @@ class IndexQueueCog(commands.Cog):
                     "type": "local_dir",
                     "path": repo_root,
                     "repo_url": repo_url,
-                    "exts": _split_list(exts),
+                    "exts": _split_list(exts) or settings.ingest_exts,
                 }
             ],
             "chunk_size": chunk_size,

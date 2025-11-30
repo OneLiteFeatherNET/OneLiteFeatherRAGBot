@@ -133,7 +133,7 @@ class RAGService:
         source = FilesystemSource(repo_root=repo_root, repo_url=repo_url, exts=list(required_exts) if required_exts else None)
         self.index_items(source.stream())
 
-    def index_items(self, items: Iterable[IngestItem]) -> None:
+    def index_items(self, items: Iterable[IngestItem], *, force: bool = False) -> None:
         """Index items with checksum skipping using a checksum store."""
         self._log.info("Loading checksum map ...")
         existing = self._checksums.load_map()
@@ -142,7 +142,7 @@ class RAGService:
         to_index: list[Document] = []
         updates: list[ChecksumRecord] = []
         for item in items:
-            if existing.get(item.doc_id) == item.checksum:
+            if not force and existing.get(item.doc_id) == item.checksum:
                 continue
             md = dict(item.metadata)
             md["checksum"] = item.checksum

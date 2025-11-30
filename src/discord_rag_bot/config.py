@@ -21,6 +21,16 @@ class Settings(BaseSettings):
     rag_mix_llm_with_rag: bool = False
     rag_mix_threshold: float | None = None
     rag_score_kind: str = "similarity"  # 'similarity' or 'distance'
+    # Ingestion defaults
+    ingest_exts: list[str] = [
+        ".md",
+        ".py",
+        ".yml",
+        ".yaml",
+        ".toml",
+        ".json",
+        ".txt",
+    ]
     # Ollama specific
     ollama_base_url: Optional[str] = None  # e.g. http://localhost:11434
     # vLLM (OpenAI-compatible) specific
