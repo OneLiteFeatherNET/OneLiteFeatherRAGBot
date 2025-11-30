@@ -31,6 +31,10 @@ class Settings(BaseSettings):
         ".json",
         ".txt",
     ]
+    # Queue watch polling interval (seconds)
+    queue_watch_poll_sec: float = 5.0
+    # ETL staging directory (for manifests)
+    etl_staging_dir: str = ".staging"
     # Ollama specific
     ollama_base_url: Optional[str] = None  # e.g. http://localhost:11434
     # vLLM (OpenAI-compatible) specific

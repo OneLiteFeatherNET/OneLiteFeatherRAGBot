@@ -9,6 +9,12 @@ import json
 from ..util.text import clip_discord_message
 from ..config import settings
 from rag_core.ingestion.web import UrlSource, WebsiteCrawlerSource
+from rag_core.ingestion.github import GitRepoSource, GitHubOrgSource
+from rag_core.ingestion.filesystem import FilesystemSource
+from rag_core.ingestion.chunked import ChunkingSource
+from rag_core.etl.artifacts import LocalArtifactStore
+from rag_core.etl.pipeline import build_manifest
+from pathlib import Path
 
 
 def _split_list(csv: Optional[str]) -> Optional[List[str]]:
@@ -25,6 +31,23 @@ class IndexQueueCog(commands.Cog):
     github = app_commands.Group(name="github", description="GitHub sources", parent=queue)
     local = app_commands.Group(name="local", description="Local filesystem sources", parent=queue)
     web = app_commands.Group(name="web", description="Web sources (URLs, crawl)", parent=queue)
+
+    async def _watch_job(self, message: discord.Message, job_id: int):
+        import asyncio
+        poll = max(1.0, float(getattr(settings, "queue_watch_poll_sec", 5.0)))
+        while True:
+            j = await self.bot.services.job_store.get_job_async(job_id)  # type: ignore[attr-defined]
+            if not j:
+                await message.edit(content=f"Job #{job_id} not found anymore.")
+                return
+            progress = ""
+            if j.progress_done is not None or j.progress_total is not None:
+                progress = f" ({j.progress_done or 0}/{j.progress_total or '?'})"
+            note = f" – {j.progress_note}" if j.progress_note else ""
+            await message.edit(content=f"Job #{job_id}: {j.status}{progress}{note}")
+            if j.status in ("completed", "failed", "canceled"):
+                return
+            await asyncio.sleep(poll)
 
     @staticmethod
     def admin_check():
@@ -53,20 +76,19 @@ class IndexQueueCog(commands.Cog):
         chunk_overlap: Optional[int] = 200,
     ):
         await interaction.response.defer(ephemeral=True)
-        payload = {
-            "sources": [
-                {
-                    "type": "github_repo",
-                    "repo": repo,
-                    "branch": branch,
-                    "exts": _split_list(exts) or settings.ingest_exts,
-                }
-            ],
-            "chunk_size": chunk_size,
-            "chunk_overlap": chunk_overlap,
-        }
+        exts_list = _split_list(exts) or settings.ingest_exts
+        await interaction.followup.send("Building manifest (GitHub repo)…", ephemeral=True)
+        source: object = GitRepoSource(repo_url=repo, branch=branch, exts=exts_list)
+        if chunk_size:
+            source = ChunkingSource(source=source, chunk_size=chunk_size or 0, overlap=chunk_overlap or 200)  # type: ignore[arg-type]
+        manifest = await __import__("asyncio").to_thread(build_manifest, source)  # type: ignore[arg-type]
+        store = LocalArtifactStore(root=Path(getattr(settings, "etl_staging_dir", ".staging")))
+        key = store.put_manifest(manifest)
+        payload = {"artifact_key": key}
         job_id = await self.bot.services.job_store.enqueue_async("ingest", payload)  # type: ignore[attr-defined]
+        msg = await interaction.channel.send(f"Job #{job_id}: queued (github repo, manifest={key})")  # type: ignore[union-attr]
         await interaction.followup.send(f"Queued job #{job_id} for repo {repo}", ephemeral=True)
+        self.bot.loop.create_task(self._watch_job(msg, job_id))
 
     @github.command(name="org", description="Queue all repos in a GitHub org for indexing")
     @admin_check.__func__()
@@ -93,23 +115,19 @@ class IndexQueueCog(commands.Cog):
         chunk_overlap: Optional[int] = 200,
     ):
         await interaction.response.defer(ephemeral=True)
-        payload = {
-            "sources": [
-                {
-                    "type": "github_org",
-                    "org": org,
-                    "visibility": visibility,
-                    "include_archived": include_archived,
-                    "topics": _split_list(topics),
-                    "exts": _split_list(exts) or settings.ingest_exts,
-                    "branch": branch,
-                }
-            ],
-            "chunk_size": chunk_size,
-            "chunk_overlap": chunk_overlap,
-        }
+        exts_list = _split_list(exts) or settings.ingest_exts
+        await interaction.followup.send("Building manifest (GitHub org)…", ephemeral=True)
+        source: object = GitHubOrgSource(org=org, visibility=visibility, include_archived=include_archived, topics=_split_list(topics), exts=exts_list, branch=branch)
+        if chunk_size:
+            source = ChunkingSource(source=source, chunk_size=chunk_size or 0, overlap=chunk_overlap or 200)  # type: ignore[arg-type]
+        manifest = await __import__("asyncio").to_thread(build_manifest, source)  # type: ignore[arg-type]
+        store = LocalArtifactStore(root=Path(getattr(settings, "etl_staging_dir", ".staging")))
+        key = store.put_manifest(manifest)
+        payload = {"artifact_key": key}
         job_id = await self.bot.services.job_store.enqueue_async("ingest", payload)  # type: ignore[attr-defined]
+        msg = await interaction.channel.send(f"Job #{job_id}: queued (github org {org}, manifest={key})")  # type: ignore[union-attr]
         await interaction.followup.send(f"Queued job #{job_id} for org {org}", ephemeral=True)
+        self.bot.loop.create_task(self._watch_job(msg, job_id))
 
     @local.command(name="dir", description="Queue a local directory for indexing")
     @admin_check.__func__()
@@ -130,20 +148,19 @@ class IndexQueueCog(commands.Cog):
         chunk_overlap: Optional[int] = 200,
     ):
         await interaction.response.defer(ephemeral=True)
-        payload = {
-            "sources": [
-                {
-                    "type": "local_dir",
-                    "path": repo_root,
-                    "repo_url": repo_url,
-                    "exts": _split_list(exts) or settings.ingest_exts,
-                }
-            ],
-            "chunk_size": chunk_size,
-            "chunk_overlap": chunk_overlap,
-        }
+        exts_list = _split_list(exts) or settings.ingest_exts
+        await interaction.followup.send("Building manifest (local dir)…", ephemeral=True)
+        source: object = FilesystemSource(repo_root=Path(repo_root), repo_url=repo_url, exts=exts_list)
+        if chunk_size:
+            source = ChunkingSource(source=source, chunk_size=chunk_size or 0, overlap=chunk_overlap or 200)  # type: ignore[arg-type]
+        manifest = await __import__("asyncio").to_thread(build_manifest, source)  # type: ignore[arg-type]
+        store = LocalArtifactStore(root=Path(getattr(settings, "etl_staging_dir", ".staging")))
+        key = store.put_manifest(manifest)
+        payload = {"artifact_key": key}
         job_id = await self.bot.services.job_store.enqueue_async("ingest", payload)  # type: ignore[attr-defined]
+        msg = await interaction.channel.send(f"Job #{job_id}: queued (local dir {repo_root}, manifest={key})")  # type: ignore[union-attr]
         await interaction.followup.send(f"Queued job #{job_id} for path {repo_root}", ephemeral=True)
+        self.bot.loop.create_task(self._watch_job(msg, job_id))
 
     @queue.command(name="list", description="List recent indexing jobs")
     @admin_check.__func__()
@@ -188,9 +205,16 @@ class IndexQueueCog(commands.Cog):
     async def web_url(self, interaction: discord.Interaction, urls: str):
         await interaction.response.defer(ephemeral=True)
         url_list = [u.strip() for u in urls.split(",") if u.strip()]
-        payload = {"sources": [{"type": "web_url", "urls": url_list}]}
+        await interaction.followup.send("Building manifest (URLs)…", ephemeral=True)
+        source = UrlSource(urls=url_list)
+        manifest = await __import__("asyncio").to_thread(build_manifest, source)
+        store = LocalArtifactStore(root=Path(getattr(settings, "etl_staging_dir", ".staging")))
+        key = store.put_manifest(manifest)
+        payload = {"artifact_key": key}
         job_id = await self.bot.services.job_store.enqueue_async("ingest", payload)  # type: ignore[attr-defined]
+        msg = await interaction.channel.send(f"Job #{job_id}: queued (web url, manifest={key})")  # type: ignore[union-attr]
         await interaction.followup.send(f"Queued job #{job_id} for {len(url_list)} URLs", ephemeral=True)
+        self.bot.loop.create_task(self._watch_job(msg, job_id))
 
     @web.command(name="website", description="Queue a website crawl for indexing")
     @admin_check.__func__()
@@ -198,18 +222,16 @@ class IndexQueueCog(commands.Cog):
     async def web_site(self, interaction: discord.Interaction, start_url: str, allowed_prefixes: str = "", max_pages: int = 200):
         await interaction.response.defer(ephemeral=True)
         prefixes = [p.strip() for p in allowed_prefixes.split(",") if p.strip()] or [start_url]
-        payload = {
-            "sources": [
-                {
-                    "type": "website",
-                    "start_urls": [start_url],
-                    "allowed_prefixes": prefixes,
-                    "max_pages": max_pages,
-                }
-            ]
-        }
+        await interaction.followup.send("Building manifest (website)…", ephemeral=True)
+        source = WebsiteCrawlerSource(start_urls=[start_url], allowed_prefixes=prefixes, max_pages=max_pages)
+        manifest = await __import__("asyncio").to_thread(build_manifest, source)
+        store = LocalArtifactStore(root=Path(getattr(settings, "etl_staging_dir", ".staging")))
+        key = store.put_manifest(manifest)
+        payload = {"artifact_key": key}
         job_id = await self.bot.services.job_store.enqueue_async("ingest", payload)  # type: ignore[attr-defined]
+        msg = await interaction.channel.send(f"Job #{job_id}: queued (website {start_url}, manifest={key})")  # type: ignore[union-attr]
         await interaction.followup.send(f"Queued job #{job_id} to crawl {start_url}", ephemeral=True)
+        self.bot.loop.create_task(self._watch_job(msg, job_id))
 
     @queue.command(name="retry", description="Retry a failed or canceled job")
     @admin_check.__func__()

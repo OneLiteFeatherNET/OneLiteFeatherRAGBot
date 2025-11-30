@@ -10,6 +10,8 @@ from rag_core import RAGService, VectorStoreConfig, RagConfig
 from rag_core.jobs import JobStore
 from rag_core.logging import setup_logging
 from rag_core.ingestion.chunked import ChunkingSource
+from rag_core.etl.artifacts import LocalArtifactStore
+from rag_core.etl.pipeline import items_from_manifest
 from rag_cli.config_loader import config_from_dict, composite_from_config
 
 
@@ -30,21 +32,34 @@ def process_one(job_store: JobStore, service: RAGService) -> bool:
         return False
     log.info("Processing job #%d type=%s", job.id, job.type)
     try:
-        cfg = config_from_dict(job.payload)
-        source = composite_from_config(cfg)
-        if cfg.chunk_size:
-            source = ChunkingSource(source=source, chunk_size=cfg.chunk_size or 0, overlap=cfg.chunk_overlap or 200)
+        # If payload references a prebuilt manifest, load it and index; otherwise use config sources
+        manifest_key = job.payload.get("artifact_key")
+        if manifest_key:
+            store = LocalArtifactStore(root=Path(getattr(settings, "etl_staging_dir", ".staging")))
+            manifest = store.get_manifest(manifest_key)
+            items_iter = items_from_manifest(manifest)
+            def progress(stage: str, *, done: int | None = None, total: int | None = None, note: str | None = None):
+                try:
+                    import asyncio
+                    asyncio.run(job_store.update_progress_async(job.id, done=done, total=total, note=note))
+                except Exception:
+                    pass
+            service.index_items(items_iter, force=False, progress=lambda stage, **kw: progress(stage, **kw))
+        else:
+            cfg = config_from_dict(job.payload)
+            source = composite_from_config(cfg)
+            if cfg.chunk_size:
+                source = ChunkingSource(source=source, chunk_size=cfg.chunk_size or 0, overlap=cfg.chunk_overlap or 200)
 
-        def progress(stage: str, *, done: int | None = None, total: int | None = None, note: str | None = None):
-            try:
-                import asyncio
+            def progress(stage: str, *, done: int | None = None, total: int | None = None, note: str | None = None):
+                try:
+                    import asyncio
+                    asyncio.run(job_store.update_progress_async(job.id, done=done, total=total, note=note))
+                except Exception:
+                    pass
 
-                asyncio.run(job_store.update_progress_async(job.id, done=done, total=total, note=note))
-            except Exception:
-                pass
-
-        progress("scanning", note="starting")
-        service.index_items(source.stream(), force=False, progress=lambda stage, **kw: progress(stage, **kw))
+            progress("scanning", note="starting")
+            service.index_items(source.stream(), force=False, progress=lambda stage, **kw: progress(stage, **kw))
         progress("done", note="completed")
         job_store.complete(job.id)
         log.info("Job #%d completed", job.id)
