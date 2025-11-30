@@ -11,6 +11,8 @@ from .services import BotServices
 class RagBot(commands.Bot):
     def __init__(self, services: BotServices):
         intents = discord.Intents.default()
+        if getattr(settings, "enable_message_content_intent", False):
+            intents.message_content = True
         super().__init__(command_prefix=commands.when_mentioned_or("!"), intents=intents)
         self.services = services
         # cache allowed guild ids for restrictive sync/checks

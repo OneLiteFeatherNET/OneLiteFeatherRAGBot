@@ -101,6 +101,10 @@ Extending the Bot
 - Add a new file under `src/discord_rag_bot/commands/<name>.py` with a Cog and an `async def setup(bot)` function that adds the Cog.
 - Cogs can access shared services via `bot.services` (e.g., `bot.services.rag`).
 
+Message-based Q&A (mention/reply)
+- You can trigger RAG answers by mentioning the bot or replying to the bot and writing a question.
+- Enable in `.env`: `APP_ENABLE_MESSAGE_CONTENT_INTENT=true` and enable the “Message Content Intent” in the Discord Developer Portal for your bot.
+
 License
 MIT — see `LICENSE`.
   - `run_queue.py` – queue worker (`rag-run-queue`) that processes jobs created from Discord
