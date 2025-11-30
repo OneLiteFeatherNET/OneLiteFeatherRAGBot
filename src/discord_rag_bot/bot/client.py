@@ -4,6 +4,7 @@ import discord
 from discord.ext import commands
 
 from ..commands.loader import load_all_cogs
+from ..listeners.loader import load_all_listeners
 from ..config import settings
 from .services import BotServices
 
@@ -21,6 +22,7 @@ class RagBot(commands.Bot):
 
     async def setup_hook(self):
         await load_all_cogs(self)
+        await load_all_listeners(self)
         # Guild-specific sync if configured; otherwise global
         if self._allowed_guild_ids:
             # Copy all global commands into each allowed guild

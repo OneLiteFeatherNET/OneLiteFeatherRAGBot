@@ -16,7 +16,8 @@ Code Structure
 - `src/discord_rag_bot/` – application layer for the bot
   - `app.py` – entrypoint (`discord-rag-bot` script)
   - `bot/` – bot client, DI services, startup wiring
-  - `commands/` – modular command cogs (auto‑loaded)
+  - `commands/` – modular slash command cogs (auto‑loaded)
+  - `listeners/` – message listeners (e.g., mention/reply chat) auto‑loaded separately
   - `infrastructure/` – adapters/factories (e.g., AI provider factory)
   - `util/` – small helpers (e.g., text clipping)
 - `src/rag_core/` – core RAG domain and provider abstraction
