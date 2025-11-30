@@ -17,6 +17,8 @@ from rag_core.etl.artifacts import LocalArtifactStore
 from rag_core.etl.artifacts_s3 import S3ArtifactStore, S3Unavailable
 from rag_core.etl.pipeline import items_from_manifest
 from rag_cli.config_loader import config_from_dict, composite_from_config
+from sqlalchemy import select, delete, MetaData, Table, func
+from rag_core.orm.session import create_engine_from_db
 
 
 def build_service() -> RAGService:
@@ -66,6 +68,58 @@ def process_one(job_repo: JobRepository, service: RAGService) -> bool:
                     pass
             if job.type == "checksum_update":
                 service.update_checksums(items_iter, progress=lambda stage, **kw: progress(stage, **kw))
+            elif job.type == "prune":
+                # Build keep set from manifest
+                keep_ids = {it.doc_id for it in items_from_manifest(manifest)}
+                prune_scope = job.payload.get("prune_scope", {}) if isinstance(job.payload, dict) else {}
+                table_name = f"data_{settings.table_name}"
+                eng = create_engine_from_db(settings.db)
+                md = MetaData()
+                with eng.begin() as conn:
+                    try:
+                        tbl = Table(table_name, md, autoload_with=eng, schema="public")
+                    except Exception:
+                        progress("prune", note="vector table not found")
+                        return True
+                    candidates: list[str] = []
+                    # metadata_repo_from_manifest -> collect repo values from manifest
+                    if prune_scope.get("metadata_repo_from_manifest"):
+                        repo_vals = set()
+                        for it in manifest.get("items", []):
+                            mdv = it.get("metadata", {}) or {}
+                            rv = mdv.get("repo")
+                            if rv:
+                                repo_vals.add(rv)
+                        if repo_vals:
+                            q = select(tbl.c.node_id).where(func.jsonb_extract_path_text(tbl.c.metadata_, "repo").in_(list(repo_vals)))
+                            candidates.extend([r[0] for r in conn.execute(q).all()])
+                    # metadata_repo_in
+                    if "metadata_repo_in" in prune_scope:
+                        vals = prune_scope.get("metadata_repo_in") or []
+                        if vals:
+                            q = select(tbl.c.node_id).where(func.jsonb_extract_path_text(tbl.c.metadata_, "repo").in_(list(vals)))
+                            candidates.extend([r[0] for r in conn.execute(q).all()])
+                    # doc_id_prefixes
+                    if "doc_id_prefixes" in prune_scope:
+                        for pref in (prune_scope.get("doc_id_prefixes") or []):
+                            like = f"{pref}%"
+                            q = select(tbl.c.node_id).where(tbl.c.node_id.like(like))
+                            candidates.extend([r[0] for r in conn.execute(q).all()])
+                    # doc_id_in_from_manifest
+                    if prune_scope.get("doc_id_in_from_manifest"):
+                        candidates.extend(list(keep_ids))
+                    cand_set = set(candidates)
+                    to_delete = [nid for nid in cand_set if nid not in keep_ids]
+                    progress("prune", total=len(cand_set), done=0, note=f"deleting {len(to_delete)}")
+                    batch = 1000
+                    deleted = 0
+                    for i in range(0, len(to_delete), batch):
+                        part = to_delete[i : i + batch]
+                        if not part:
+                            continue
+                        conn.execute(delete(tbl).where(tbl.c.node_id.in_(part)))
+                        deleted += len(part)
+                        progress("prune", total=len(to_delete), done=deleted, note=f"deleted {deleted}")
             else:
                 service.index_items(items_iter, force=False, progress=lambda stage, **kw: progress(stage, **kw))
         else:
