@@ -15,6 +15,8 @@ from rag_core.ingestion.composite import CompositeSource
 @dataclass
 class IngestConfig:
     sources: List[IngestionSource]
+    chunk_size: int | None = None
+    chunk_overlap: int | None = None
 
 
 def load_config(path: Path) -> IngestConfig:
@@ -56,9 +58,12 @@ def load_config(path: Path) -> IngestConfig:
         else:
             raise ValueError(f"Unknown source type: {t}")
 
-    return IngestConfig(sources=srcs)
+    return IngestConfig(
+        sources=srcs,
+        chunk_size=data.get("chunk_size"),
+        chunk_overlap=data.get("chunk_overlap"),
+    )
 
 
 def composite_from_config(cfg: IngestConfig) -> IngestionSource:
     return CompositeSource(cfg.sources)
-
