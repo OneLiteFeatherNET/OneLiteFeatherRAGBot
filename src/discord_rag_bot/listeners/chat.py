@@ -10,6 +10,7 @@ from ..util.text import clip_discord_message
 from rag_core import RagResult
 from ..infrastructure.config_store import load_prompt_effective
 from ..infrastructure.gating import should_use_rag
+from ..infrastructure.language import get_language_hint
 from rag_core.metrics import discord_messages_processed_total, rag_queries_total
 
 
@@ -81,6 +82,9 @@ class ChatListenerCog(commands.Cog):
 
         def run_query() -> tuple[str, list[str]]:
             prompt = load_prompt_effective(message.guild.id if message.guild else None, message.channel.id)
+            lang_hint = get_language_hint(question)
+            if lang_hint:
+                prompt = f"{prompt}\n\nAntwortsprache: {lang_hint}"
             # 1) Heuristik: Smalltalk etc. ohne teures Retrieval beantworten
             pre = should_use_rag(
                 question,

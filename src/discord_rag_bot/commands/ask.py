@@ -9,6 +9,7 @@ from rag_core import RagResult
 from ..util.text import clip_discord_message
 from ..infrastructure.config_store import load_prompt_effective
 from ..infrastructure.gating import should_use_rag
+from ..infrastructure.language import get_language_hint
 from rag_core.metrics import rag_queries_total
 
 
@@ -29,6 +30,9 @@ class AskCog(commands.Cog):
 
         def run_query() -> tuple[str, list[str]]:
             prompt = load_prompt_effective(interaction.guild_id, interaction.channel_id)
+            lang_hint = get_language_hint(question)
+            if lang_hint:
+                prompt = f"{prompt}\n\nAntwortsprache: {lang_hint}"
             # 1) Lightweight Gating ohne Retrieval (Smalltalk etc.)
             pre = should_use_rag(
                 question,

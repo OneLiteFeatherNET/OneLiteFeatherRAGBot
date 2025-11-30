@@ -87,6 +87,8 @@ Environment (APP_ prefix)
  - Logging: `APP_LOG_LEVEL` (DEBUG/INFO/...) for bot/CLI/worker
 - RAG behavior: driven by an LLM gating strategy (`APP_RAG_GATE_STRATEGY=llm`). The LLM reads the context and decides whether to use retrieval or respond plainly.
 - Hybrid/threshold mode: `APP_RAG_GATE_THRESHOLD` can still enforce retrieval when scores meet your configured threshold (useful for auto|hybrid modes).
+- The bot automatically detects the user language (via langdetect) and instructs the LLM to respond in that language, so answers never randomly switch tongues.
+
 
 Quickstart (Docker Compose)
 1. Copy `.env.example` to `.env` and set required values.
