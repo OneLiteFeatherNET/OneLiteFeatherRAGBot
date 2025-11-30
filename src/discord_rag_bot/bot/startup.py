@@ -18,7 +18,9 @@ from ..tools.queue_tools import (
     QueueGithubRepoTool,
     QueueLocalDirTool,
     QueueGithubOrgTool,
+    QueueGithubRepoLocalTool,
 )
+from ..tools.repo_tools import ListKnownReposTool, RepoReindexTool
 
 
 def build_services() -> BotServices:
@@ -61,8 +63,11 @@ def build_services() -> BotServices:
     tools.register(QueueWebsiteTool(enqueue_callable))
     tools.register(QueueSitemapTool(enqueue_callable))
     tools.register(QueueGithubRepoTool(enqueue_callable))
+    tools.register(QueueGithubRepoLocalTool(enqueue_callable))
     tools.register(QueueLocalDirTool(enqueue_callable))
     tools.register(QueueGithubOrgTool(enqueue_callable))
+    tools.register(ListKnownReposTool())
+    tools.register(RepoReindexTool(enqueue_callable))
     return BotServices(rag=rag, job_repo_factory=job_repo_factory, job_repo_default=default_job_repo, tools=tools, memory=memory)
 
 

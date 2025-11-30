@@ -118,6 +118,35 @@ class QueueGithubRepoTool(_BaseQueueTool):
         return self._put_manifest_and_enqueue(manifest)
 
 
+class QueueGithubRepoLocalTool(_BaseQueueTool):
+    name = "queue.github.repo_local"
+    description = "Queue a GitHub repository via local clone. payload: { repo: string, branch?: string, exts?: string[], chunk_size?: number, chunk_overlap?: number, shallow?: boolean, fetch_depth?: number }"
+
+    def run(self, payload: Dict[str, Any]) -> ToolResult:
+        repo = str(payload.get("repo") or "").strip()
+        if not repo:
+            return ToolResult(content="repo url required")
+        cfg: Dict[str, Any] = {
+            "sources": [
+                {"type": "github_repo_local", "repo": repo}
+            ]
+        }
+        if payload.get("branch"):
+            cfg["sources"][0]["branch"] = str(payload["branch"])  # type: ignore[index]
+        if payload.get("exts"):
+            cfg["sources"][0]["exts"] = list(payload["exts"])  # type: ignore[index]
+        if payload.get("shallow") is not None:
+            cfg["sources"][0]["shallow"] = bool(payload["shallow"])  # type: ignore[index]
+        if payload.get("fetch_depth"):
+            cfg["sources"][0]["fetch_depth"] = int(payload["fetch_depth"])  # type: ignore[index]
+        if payload.get("chunk_size"):
+            cfg["chunk_size"] = int(payload["chunk_size"])  # type: ignore[index]
+            cfg["chunk_overlap"] = int(payload.get("chunk_overlap") or 200)  # type: ignore[index]
+
+        job_id = __import__("asyncio").run(self._ctx.enqueue("ingest", cfg))
+        return ToolResult(content=f"queued local-clone ingest job #{job_id} for {repo}", raw={"job_id": job_id, "repo": repo})
+
+
 class QueueLocalDirTool(_BaseQueueTool):
     name = "queue.local.dir"
     description = "Queue a local directory. payload: { repo_root: string, repo_url: string, exts?: string[], chunk_size?: number, chunk_overlap?: number }"

@@ -8,7 +8,7 @@ import yaml
 
 from rag_core.ingestion.base import IngestionSource
 from rag_core.ingestion.filesystem import FilesystemSource
-from rag_core.ingestion.github import GitRepoSource, GitHubOrgSource
+from rag_core.ingestion.github import GitRepoSource, GitHubOrgSource, GitRepoLocalSource
 from rag_core.ingestion.composite import CompositeSource
 from rag_core.ingestion.web import UrlSource, SitemapSource, WebsiteCrawlerSource
 
@@ -56,6 +56,19 @@ def load_config(path: Path) -> IngestConfig:
                     token=item.get("token"),
                 )
             )
+        elif t == "github_repo_local":
+            from os import getenv
+            base = Path(getenv("APP_ETL_STAGING_DIR", ".staging")) / "repos"
+            srcs.append(
+                GitRepoLocalSource(
+                    repo_url=item["repo"],
+                    branch=item.get("branch"),
+                    exts=item.get("exts"),
+                    workdir=Path(item.get("workdir")) if item.get("workdir") else base,
+                    shallow=bool(item.get("shallow", True)),
+                    fetch_depth=int(item.get("fetch_depth", 50)),
+                )
+            )
         else:
             raise ValueError(f"Unknown source type: {t}")
 
@@ -101,6 +114,19 @@ def config_from_dict(data: dict) -> IngestConfig:
                     exts=item.get("exts"),
                     branch=item.get("branch"),
                     token=item.get("token"),
+                )
+            )
+        elif t == "github_repo_local":
+            from os import getenv
+            base = Path(getenv("APP_ETL_STAGING_DIR", ".staging")) / "repos"
+            srcs.append(
+                GitRepoLocalSource(
+                    repo_url=item["repo"],
+                    branch=item.get("branch"),
+                    exts=item.get("exts"),
+                    workdir=Path(item.get("workdir")) if item.get("workdir") else base,
+                    shallow=bool(item.get("shallow", True)),
+                    fetch_depth=int(item.get("fetch_depth", 50)),
                 )
             )
         elif t == "web_url":
