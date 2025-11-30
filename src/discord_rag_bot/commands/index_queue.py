@@ -195,7 +195,15 @@ class IndexQueueCog(commands.Cog):
         exts_list = _split_list(exts) or settings.ingest_exts
         await interaction.followup.send("Listing organization repositories…", ephemeral=True)
         src_org = GitHubOrgSource(org=org, visibility=visibility, include_archived=include_archived, topics=_split_list(topics), exts=exts_list, branch=branch)
-        urls = src_org._list_repo_urls()
+        try:
+            urls = src_org._list_repo_urls()
+        except Exception as e:
+            await interaction.followup.send(
+                f"❌ Could not list repositories for '{org}': {e}.\n"
+                "Make sure the organization exists and that GITHUB_TOKEN has access, or try indexing a single repo via /queue github repo.",
+                ephemeral=True,
+            )
+            return
         if not urls:
             await interaction.followup.send("(no repositories found)", ephemeral=True)
             return

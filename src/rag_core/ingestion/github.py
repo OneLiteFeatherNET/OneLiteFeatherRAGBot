@@ -12,7 +12,7 @@ import shutil
 import logging
 
 from .base import IngestionSource, IngestItem
-from github import Github
+from github import Github, GithubException
 from .filesystem import FilesystemSource, DEFAULT_EXTS
 
 
@@ -114,8 +114,17 @@ class GitHubOrgSource(IngestionSource):
         log = logging.getLogger(__name__)
         token = self.token or os.getenv("GITHUB_TOKEN")
         gh = Github(login_or_token=token) if token else Github()
-        org = gh.get_organization(self.org)
-        repos = org.get_repos(type=self.visibility)
+        # Try organization first; if not found, fallback to user namespace
+        try:
+            org = gh.get_organization(self.org)
+            repos = org.get_repos(type=self.visibility)
+        except GithubException.UnknownObjectException:
+            # Treat identifier as a user account
+            user = gh.get_user(self.org)
+            try:
+                repos = user.get_repos()  # visibility filter may not be supported uniformly
+            except Exception:
+                repos = user.get_repos()
         urls: List[str] = []
         for repo in repos:
             try:
