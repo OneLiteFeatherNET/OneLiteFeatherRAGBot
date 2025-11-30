@@ -17,7 +17,11 @@ class IndexQueueCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
-    @app_commands.command(name="queue_github_repo", description="Queue a GitHub repository for indexing")
+    queue = app_commands.Group(name="queue", description="Manage indexing jobs")
+    github = app_commands.Group(name="github", description="GitHub sources", parent=queue)
+    local = app_commands.Group(name="local", description="Local filesystem sources", parent=queue)
+
+    @github.command(name="repo", description="Queue a GitHub repository for indexing")
     @app_commands.describe(
         repo="GitHub repo URL (e.g., https://github.com/ORG/REPO)",
         branch="Optional branch (default: default branch)",
@@ -25,7 +29,7 @@ class IndexQueueCog(commands.Cog):
         chunk_size="Optional chunk size (characters)",
         chunk_overlap="Optional chunk overlap (characters)",
     )
-    async def queue_github_repo(
+    async def github_repo(
         self,
         interaction: discord.Interaction,
         repo: str,
@@ -50,7 +54,7 @@ class IndexQueueCog(commands.Cog):
         job_id = await self.bot.services.job_store.enqueue_async("ingest", payload)  # type: ignore[attr-defined]
         await interaction.followup.send(f"Queued job #{job_id} for repo {repo}", ephemeral=True)
 
-    @app_commands.command(name="queue_github_org", description="Queue all repos in a GitHub org for indexing")
+    @github.command(name="org", description="Queue all repos in a GitHub org for indexing")
     @app_commands.describe(
         org="GitHub organization name",
         visibility="Visibility filter (all|public|private)",
@@ -61,7 +65,7 @@ class IndexQueueCog(commands.Cog):
         chunk_size="Optional chunk size",
         chunk_overlap="Optional chunk overlap",
     )
-    async def queue_github_org(
+    async def github_org(
         self,
         interaction: discord.Interaction,
         org: str,
@@ -92,7 +96,7 @@ class IndexQueueCog(commands.Cog):
         job_id = await self.bot.services.job_store.enqueue_async("ingest", payload)  # type: ignore[attr-defined]
         await interaction.followup.send(f"Queued job #{job_id} for org {org}", ephemeral=True)
 
-    @app_commands.command(name="queue_local_dir", description="Queue a local directory for indexing")
+    @local.command(name="dir", description="Queue a local directory for indexing")
     @app_commands.describe(
         repo_root="Local path to repository root on the indexer host",
         repo_url="Public URL used for source links",
@@ -100,7 +104,7 @@ class IndexQueueCog(commands.Cog):
         chunk_size="Optional chunk size",
         chunk_overlap="Optional chunk overlap",
     )
-    async def queue_local_dir(
+    async def local_dir(
         self,
         interaction: discord.Interaction,
         repo_root: str,
