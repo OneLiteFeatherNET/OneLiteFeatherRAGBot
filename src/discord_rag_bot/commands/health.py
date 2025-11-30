@@ -6,7 +6,8 @@ from typing import Optional
 import discord
 from discord import app_commands
 from discord.ext import commands
-from sqlalchemy import create_engine, text
+from sqlalchemy import func, select, MetaData, Table
+from rag_core.orm.session import create_engine_from_db
 
 from ..config import settings
 from ..util.text import clip_discord_message
@@ -41,33 +42,31 @@ class HealthCog(commands.Cog):
         intents_mci = getattr(settings, "enable_message_content_intent", False)
 
         # DB checks
-        dsn = (
-            f"postgresql+psycopg2://{settings.db.user}:{settings.db.password}"
-            f"@{settings.db.host}:{settings.db.port}/{settings.db.database}"
-        )
+        eng = create_engine_from_db(settings.db)
         actual_dim: Optional[int] = None
         row_count: Optional[int] = None
         table_name = f"data_{table}"
         try:
-            engine = create_engine(dsn, pool_pre_ping=True)
-            with engine.connect() as conn:
-                # Check table dims
-                dim_sql = text(
-                    """
-                    SELECT (a.atttypmod - 4) / 4 AS dims
-                    FROM pg_attribute a
-                    JOIN pg_class c ON a.attrelid = c.oid
-                    JOIN pg_namespace n ON c.relnamespace = n.oid
-                    WHERE n.nspname = 'public' AND c.relname = :table AND a.attname = 'embedding'
-                    """
-                )
-                row = conn.execute(dim_sql, {"table": table_name}).fetchone()
-                if row and row[0] is not None:
-                    actual_dim = int(row[0])
-                # Count rows if table exists
-                if actual_dim is not None:
-                    cnt_sql = text(f"SELECT COUNT(*) FROM public.{table_name}")
-                    row_count = int(conn.execute(cnt_sql).scalar() or 0)
+            with eng.connect() as conn:
+                md = MetaData()
+                try:
+                    tbl = Table(table_name, md, autoload_with=eng, schema="public")
+                except Exception:
+                    tbl = None  # type: ignore[assignment]
+                if tbl is not None:
+                    # Try to infer embedding dimension from reflected column type (pgvector)
+                    try:
+                        col = tbl.c.embedding  # type: ignore[attr-defined]
+                        actual_dim = getattr(col.type, "dim", None)
+                        if actual_dim is not None:
+                            actual_dim = int(actual_dim)
+                    except Exception:
+                        actual_dim = None
+                    # Count rows
+                    try:
+                        row_count = int(conn.execute(select(func.count()).select_from(tbl)).scalar() or 0)
+                    except Exception:
+                        row_count = None
         except Exception:
             # ignore DB errors here; we just present what we have
             pass
@@ -93,4 +92,3 @@ class HealthCog(commands.Cog):
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(HealthCog(bot))
-

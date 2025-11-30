@@ -5,7 +5,8 @@ from typing import Optional
 import discord
 from discord import app_commands
 from discord.ext import commands
-from sqlalchemy import create_engine, text
+from sqlalchemy import func, select, MetaData, Table
+from rag_core.orm.session import create_engine_from_db
 
 from ..config import settings
 from ..util.text import clip_discord_message
@@ -34,10 +35,7 @@ class StatsCog(commands.Cog):
         table_name = f"data_{table}"
         embed_dim = int(settings.embed_dim)
 
-        dsn = (
-            f"postgresql+psycopg2://{settings.db.user}:{settings.db.password}"
-            f"@{settings.db.host}:{settings.db.port}/{settings.db.database}"
-        )
+        eng = create_engine_from_db(settings.db)
 
         total_chunks: Optional[int] = None
         total_chars: Optional[int] = None
@@ -45,37 +43,30 @@ class StatsCog(commands.Cog):
         actual_dim: Optional[int] = None
 
         try:
-            engine = create_engine(dsn, pool_pre_ping=True)
-            with engine.connect() as conn:
-                # Verify table and dimension
-                dim_sql = text(
-                    """
-                    SELECT (a.atttypmod - 4) / 4 AS dims
-                    FROM pg_attribute a
-                    JOIN pg_class c ON a.attrelid = c.oid
-                    JOIN pg_namespace n ON c.relnamespace = n.oid
-                    WHERE n.nspname = 'public' AND c.relname = :table AND a.attname = 'embedding'
-                    """
-                )
-                row = conn.execute(dim_sql, {"table": table_name}).fetchone()
-                if row and row[0] is not None:
-                    actual_dim = int(row[0])
+            with eng.connect() as conn:
+                md = MetaData()
+                try:
+                    tbl = Table(table_name, md, autoload_with=eng, schema="public")
+                except Exception:
+                    tbl = None  # type: ignore[assignment]
+                if tbl is not None:
+                    # Dimension from reflected pgvector column
+                    try:
+                        col = tbl.c.embedding  # type: ignore[attr-defined]
+                        actual_dim = getattr(col.type, "dim", None)
+                        if actual_dim is not None:
+                            actual_dim = int(actual_dim)
+                    except Exception:
+                        actual_dim = None
 
-                # Counts
-                cnt_sql = text(f"SELECT COUNT(*) FROM public.{table_name}")
-                total_chunks = int(conn.execute(cnt_sql).scalar() or 0)
+                    total_chunks = int(conn.execute(select(func.count()).select_from(tbl)).scalar() or 0)
+                    total_chars = int(conn.execute(select(func.sum(func.octet_length(tbl.c.text)))).scalar() or 0)
 
-                char_sql = text(f"SELECT SUM(OCTET_LENGTH(text)) FROM public.{table_name}")
-                total_chars = int(conn.execute(char_sql).scalar() or 0)
-
-                # Distinct documents: prefer parent_id, then ref_doc_id, else node_id
-                docs_sql = text(
-                    f"""
-                    SELECT COUNT(DISTINCT COALESCE(metadata_->>'parent_id', metadata_->>'ref_doc_id', node_id))
-                    FROM public.{table_name}
-                    """
-                )
-                distinct_docs = int(conn.execute(docs_sql).scalar() or 0)
+                    # Distinct docs: COALESCE(jsonb_extract_path_text(metadata_, 'parent_id'), ... , node_id)
+                    parent = func.jsonb_extract_path_text(tbl.c.metadata_, "parent_id")
+                    refdoc = func.jsonb_extract_path_text(tbl.c.metadata_, "ref_doc_id")
+                    doc_expr = func.coalesce(parent, refdoc, tbl.c.node_id)
+                    distinct_docs = int(conn.execute(select(func.count(func.distinct(doc_expr)))).scalar() or 0)
         except Exception as e:
             await interaction.followup.send(f"Fehler beim Lesen der Statistiken: {e}", ephemeral=True)
             return

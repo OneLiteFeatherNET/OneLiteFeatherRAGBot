@@ -16,7 +16,8 @@ from .providers.base import AIProvider
 from .checksums import ChecksumStore, ChecksumRecord
 from .ingestion.filesystem import FilesystemSource
 from .ingestion.base import IngestItem
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, select, func, MetaData, Table
+from .orm.session import create_engine_from_db
 
 
 @dataclass(frozen=True)
@@ -236,27 +237,22 @@ class RAGService:
         """
         table_name = f"data_{self.vs_config.table_name}"
         try:
-            dsn = (
-                f"postgresql+psycopg2://{self.vs_config.db.user}:{self.vs_config.db.password}"
-                f"@{self.vs_config.db.host}:{self.vs_config.db.port}/{self.vs_config.db.database}"
-            )
-            engine = create_engine(dsn, pool_pre_ping=True)
+            engine = create_engine_from_db(self.vs_config.db)
             with engine.connect() as conn:
-                sql = text(
-                    """
-                    SELECT (a.atttypmod - 4) / 4 AS dims
-                    FROM pg_attribute a
-                    JOIN pg_class c ON a.attrelid = c.oid
-                    JOIN pg_namespace n ON c.relnamespace = n.oid
-                    WHERE n.nspname = 'public' AND c.relname = :table AND a.attname = 'embedding'
-                    """
-                )
-                row = conn.execute(sql, {"table": table_name}).fetchone()
-                if not row:
-                    # Table not found yet; skip
+                md = MetaData()
+                try:
+                    tbl = Table(table_name, md, autoload_with=engine, schema="public")
+                except Exception:
                     self._log.debug("Embedding dimension check skipped (table %s not found)", table_name)
                     return
-                actual = int(row[0]) if row[0] is not None else None
+                # Reflect pgvector column type to get dimension if available
+                try:
+                    col = tbl.c.embedding  # type: ignore[attr-defined]
+                    actual = getattr(col.type, "dim", None)
+                    if actual is not None:
+                        actual = int(actual)
+                except Exception:
+                    actual = None
                 expected = int(self.vs_config.embed_dim)
                 if actual is None:
                     self._log.debug("Embedding dimension check inconclusive for table %s", table_name)
@@ -282,8 +278,7 @@ class RAGService:
                     )
                 # Also cache current row count
                 try:
-                    cnt_sql = text(f"SELECT COUNT(*) FROM public.{table_name}")
-                    self._row_count = int(conn.execute(cnt_sql).scalar() or 0)
+                    self._row_count = int(conn.execute(select(func.count()).select_from(tbl)).scalar() or 0)
                 except Exception:
                     self._row_count = None
         except Exception as e:
@@ -293,20 +288,14 @@ class RAGService:
     def _get_row_count(self) -> int:
         table_name = f"data_{self.vs_config.table_name}"
         try:
-            dsn = (
-                f"postgresql+psycopg2://{self.vs_config.db.user}:{self.vs_config.db.password}"
-                f"@{self.vs_config.db.host}:{self.vs_config.db.port}/{self.vs_config.db.database}"
-            )
-            engine = create_engine(dsn, pool_pre_ping=True)
+            engine = create_engine_from_db(self.vs_config.db)
             with engine.connect() as conn:
-                exists_sql = text(
-                    "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public' AND table_name=:t"
-                )
-                exists = int(conn.execute(exists_sql, {"t": table_name}).scalar() or 0)
-                if not exists:
+                md = MetaData()
+                try:
+                    tbl = Table(table_name, md, autoload_with=engine, schema="public")
+                except Exception:
                     return 0
-                cnt_sql = text(f"SELECT COUNT(*) FROM public.{table_name}")
-                return int(conn.execute(cnt_sql).scalar() or 0)
+                return int(conn.execute(select(func.count()).select_from(tbl)).scalar() or 0)
         except Exception:
             return 0
 
