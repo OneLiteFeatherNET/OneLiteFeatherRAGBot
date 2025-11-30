@@ -16,22 +16,20 @@ class RagBot(commands.Bot):
         # cache allowed guild ids for restrictive sync/checks
         self._allowed_guild_ids = set(int(g) for g in (getattr(settings, "guild_ids", []) or []))
 
-    def _app_command_guild_check(self, interaction: discord.Interaction) -> bool:
-        # Restrictive: when guild_ids configured, only allow those guilds
-        if not self._allowed_guild_ids:
-            return True
-        return interaction.guild_id in self._allowed_guild_ids
-
     async def setup_hook(self):
         await load_all_cogs(self)
-        # Apply restrictive guild check to all slash commands
-        self.tree.add_check(self._app_command_guild_check)
         # Guild-specific sync if configured; otherwise global
         if self._allowed_guild_ids:
-            for gid in self._allowed_guild_ids:
-                guild_obj = discord.Object(id=int(gid))
-                self.tree.copy_global_to(guild=guild_obj)
-                await self.tree.sync(guild=guild_obj)
+            # Copy all global commands into each allowed guild
+            guild_objs = [discord.Object(id=int(g)) for g in self._allowed_guild_ids]
+            for gobj in guild_objs:
+                self.tree.copy_global_to(guild=gobj)
+            # Clear global and sync to remove any global registrations
+            self.tree.clear_commands(guild=None)
+            await self.tree.sync(guild=None)
+            # Now sync per guild
+            for gobj in guild_objs:
+                await self.tree.sync(guild=gobj)
         else:
             await self.tree.sync()
 
