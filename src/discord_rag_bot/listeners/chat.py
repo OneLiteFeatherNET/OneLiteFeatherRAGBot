@@ -16,6 +16,7 @@ from ..infrastructure.tool_invocation import extract_tool_call, can_run_tools_fo
 from ..infrastructure.tool_planner import maybe_execute_tool_from_text
 from ..infrastructure.credits import estimate_credits_for_question, pre_authorize, adjust_usage, compute_user_policy
 from ..infrastructure.permissions import is_admin_member
+from ..infrastructure.response_policy import decide_response_policy
 
 
 class ChatListenerCog(commands.Cog):
