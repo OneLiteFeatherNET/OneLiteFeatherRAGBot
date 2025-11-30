@@ -39,9 +39,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install tomlkit pyyaml
 
-      - name: Install semantic-release and plugins
+      - name: Install semantic-release and plugins (locked)
         run: |
-          npm install --no-audit --no-fund
+          npm ci --no-audit --no-fund
 
       - name: Semantic Release
         env:
