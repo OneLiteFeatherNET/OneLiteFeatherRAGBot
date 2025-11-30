@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Optional, Literal
+import asyncio
 
 import discord
 from discord import app_commands
@@ -84,7 +85,13 @@ class MemoryCommands(commands.Cog):
         channel_id = interaction.channel.id if (scope == "channel" and hasattr(interaction.channel, "id")) else None
 
         try:
-            count = self.bot.services.memory.clear(user_id=int(target.id), channel_id=channel_id, scope=scope)  # type: ignore[attr-defined]
+            # Execute clear in a worker thread to avoid event-loop issues with legacy fallback
+            count = await asyncio.to_thread(
+                self.bot.services.memory.clear,  # type: ignore[attr-defined]
+                user_id=int(target.id),
+                channel_id=channel_id,
+                scope=scope,
+            )
         except Exception as e:
             await interaction.response.send_message(f"❌ Löschen fehlgeschlagen: {e}", ephemeral=True)
             return
@@ -98,4 +105,3 @@ class MemoryCommands(commands.Cog):
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(MemoryCommands(bot))
-

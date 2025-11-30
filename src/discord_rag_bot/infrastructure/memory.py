@@ -44,6 +44,16 @@ def ensure_store() -> None:
     asyncio.run(run())
 
 
+def _run_bg(coro) -> None:
+    """Run coroutine either in a background task (if loop running) or with asyncio.run()."""
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        asyncio.run(coro)
+    else:
+        loop.create_task(coro)
+
+
 def save_message(*, user_id: int, guild_id: Optional[int], channel_id: Optional[int], role: str, content: str, kind: str = "message") -> None:
     async def run():
         conn = await asyncpg.connect(_dsn())
@@ -64,7 +74,7 @@ def save_message(*, user_id: int, guild_id: Optional[int], channel_id: Optional[
         finally:
             await conn.close()
 
-    asyncio.run(run())
+    _run_bg(run())
 
 
 @dataclass
