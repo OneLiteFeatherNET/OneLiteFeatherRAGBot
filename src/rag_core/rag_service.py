@@ -23,6 +23,8 @@ from sqlalchemy import create_engine, text
 class RagResult:
     answer: str
     sources: list[str]
+    best_score: Optional[float] = None
+    score_kind: str = "similarity"
 
 
 @dataclass(frozen=True)
@@ -101,6 +103,7 @@ class RAGService:
         response = self._run_query_with_prompt(question, system_prompt)
         sources = self._extract_sources(response)
         text = str(response)
+        best = self._best_score(response)
 
         # Determine best score if available
         best = self._best_score(response)
@@ -123,7 +126,12 @@ class RAGService:
             llm_resp = llm.complete(question)
             text = f"{text}\n\n— General answer —\n{str(llm_resp)}"
 
-        return RagResult(answer=text, sources=sources)
+        return RagResult(answer=text, sources=sources, best_score=best, score_kind=self.rag_config.score_kind)
+
+    def answer_llm(self, question: str, *, system_prompt: str | None = None) -> str:
+        llm = self._select_llm(system_prompt)
+        resp = llm.complete(question)
+        return str(resp)
 
     def index_directory(
         self,
