@@ -258,13 +258,22 @@ class GitRepoLocalSource(IngestionSource):
         if not shutil.which("git"):
             raise RuntimeError("git binary not found in PATH; required for local clone mode")
         if not dest.exists():
-            args = ["clone", "--no-tags", "--single-branch"]
-            if branch:
-                args += ["--branch", branch]
-            if self.shallow and self.fetch_depth > 0:
-                args += ["--depth", str(int(self.fetch_depth))]
-            args += [self.repo_url, str(dest)]
-            self._run_git(args)
+            # First attempt: clone possibly with branch/depth
+            def _clone(with_branch: bool) -> None:
+                args = ["clone", "--no-tags", "--single-branch"]
+                if with_branch and branch:
+                    args += ["--branch", branch]
+                if self.shallow and self.fetch_depth > 0:
+                    args += ["--depth", str(int(self.fetch_depth))]
+                args += [self.repo_url, str(dest)]
+                self._run_git(args)
+            try:
+                _clone(with_branch=True)
+            except Exception:
+                # Fallback: clone default branch (branch may not exist)
+                if dest.exists():
+                    shutil.rmtree(dest, ignore_errors=True)
+                _clone(with_branch=False)
         else:
             # fetch + checkout + pull
             try:
@@ -272,7 +281,15 @@ class GitRepoLocalSource(IngestionSource):
             except Exception:
                 pass
             if branch:
-                self._run_git(["checkout", branch], cwd=dest)
+                # Try checkout requested branch; fallback to current/default
+                try:
+                    self._run_git(["checkout", branch], cwd=dest)
+                except Exception:
+                    try:
+                        self._run_git(["checkout", "-B", branch, f"origin/{branch}"], cwd=dest)
+                    except Exception:
+                        # Keep current branch
+                        pass
             if self.shallow and self.fetch_depth > 0:
                 try:
                     self._run_git(["pull", "--ff-only", "--depth", str(int(self.fetch_depth))], cwd=dest)
