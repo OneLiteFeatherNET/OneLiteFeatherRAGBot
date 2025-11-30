@@ -12,7 +12,8 @@ from ..infrastructure.config_store import load_prompt_effective
 from ..infrastructure.gating import should_use_rag
 from ..infrastructure.language import get_language_hint
 from rag_core.metrics import discord_messages_processed_total, rag_queries_total
-from ..infrastructure.credits import estimate_credits_for_question, pre_authorize, adjust_usage, resolve_user_limit_from_roles
+from ..infrastructure.credits import estimate_credits_for_question, pre_authorize, adjust_usage, compute_user_policy
+from ..infrastructure.permissions import is_admin_member
 
 
 class ChatListenerCog(commands.Cog):
@@ -149,19 +150,20 @@ class ChatListenerCog(commands.Cog):
         # Credits: pre-authorize based on estimate (if enabled)
         est_credits = 0
         reserved = 0
-        user_limit = None
+        user_unlimited = False
         if getattr(self.bot, "services", None) and getattr(self.bot.services, "rag", None):  # basic sanity
             try:
                 from ..config import settings as _settings
                 if getattr(_settings, "credit_enabled", False):
                     est_credits = estimate_credits_for_question(question)
-                    # Resolve user limit by roles
+                    # Resolve user policy (unlimited or per-user limit)
                     roles = []
+                    is_admin = False
                     if isinstance(message.author, discord.Member):
                         for r in message.author.roles:
                             roles.append((int(getattr(r, "id", 0) or 0), str(getattr(r, "name", "") or "")))
-                    user_limit = resolve_user_limit_from_roles(member_roles=roles)
-                    # Temporarily set default limit to computed user_limit for reservation
+                        is_admin = bool(is_admin_member(message.author))
+                    user_unlimited, user_limit = compute_user_policy(user_id=int(message.author.id), member_roles=roles, is_admin=is_admin)
                     # Pre-authorize in a thread to avoid event-loop blocking
                     ok, _, _ = await asyncio.to_thread(pre_authorize, int(message.author.id), int(est_credits), user_limit_override=int(user_limit))
                     if not ok:
