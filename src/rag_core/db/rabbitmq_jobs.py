@@ -77,27 +77,12 @@ class RabbitMQJobRepository(JobRepository):
                 await msg.reject(requeue=False)
                 return None
             # Mark processing in Postgres (attempts++) and return job
-            # Reuse PostgresJobRepository transactional update
-            # We don't have a dedicated method to start by ID; emulate: get job and update fields
             job = await self._pg.get(job_id)
             if not job:
                 await msg.reject(requeue=False)
                 return None
-            # Force status transition using Postgres repo internals via direct SQL path:
-            # use list/get semantics as best-effort by calling private method via enqueue/fetch pattern
-            # Simulate: set status=processing and attempts=attempts+1
-            # Use a small hack: call retry() to move to pending then fetch_and_start() won't pick specifically this job.
-            # Instead, update explicitly via connection
-            pgdsn = self._pg._dsn()  # type: ignore[attr-defined]
-            import asyncpg  # local import
-            pgc = await asyncpg.connect(pgdsn)
-            try:
-                await pgc.execute(
-                    f"UPDATE {self._pg.table} SET status='processing', started_at=NOW(), attempts = attempts + 1 WHERE id=$1",
-                    job_id,
-                )
-            finally:
-                await pgc.close()
+            if hasattr(self._pg, "mark_processing"):
+                await getattr(self._pg, "mark_processing")(job_id)  # type: ignore[misc]
             job = await self._pg.get(job_id)
             # Save message for ack on completion
             self._pending[job_id] = msg
