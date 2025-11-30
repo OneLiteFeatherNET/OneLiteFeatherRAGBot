@@ -9,6 +9,7 @@ from rag_core import RagResult
 from ..util.text import clip_discord_message
 from ..infrastructure.config_store import load_prompt_effective
 from ..infrastructure.gating import should_use_rag
+from rag_core.metrics import rag_queries_total
 
 
 class AskCog(commands.Cog):
@@ -38,6 +39,10 @@ class AskCog(commands.Cog):
             )
             if not pre:
                 ans = self.bot.services.rag.answer_llm(question, system_prompt=prompt)  # type: ignore[attr-defined]
+                try:
+                    rag_queries_total.labels(mode="llm").inc()
+                except Exception:
+                    pass
                 return ans, []
 
             # 2) Retrieval + Score‑basiertes Gating
@@ -54,9 +59,18 @@ class AskCog(commands.Cog):
                 return str(res.answer), res.sources
             else:
                 ans = self.bot.services.rag.answer_llm(question, system_prompt=prompt)  # type: ignore[attr-defined]
+                try:
+                    rag_queries_total.labels(mode="llm").inc()
+                except Exception:
+                    pass
                 return ans, []
 
         answer, sources = await asyncio.to_thread(run_query)
+        if sources:
+            try:
+                rag_queries_total.labels(mode="rag").inc()
+            except Exception:
+                pass
         text = answer
         if sources:
             text += "\n\nSources:\n" + "\n".join(f"- {s}" for s in sources)

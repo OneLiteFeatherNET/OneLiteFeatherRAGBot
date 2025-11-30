@@ -24,6 +24,7 @@ dependencies = [
     "boto3>=1.35.0",
     "pgvector>=0.3.3",
     "aio-pika>=9.4.1",
+    "prometheus-client>=0.20.0",
 ]
 
 [project.scripts]

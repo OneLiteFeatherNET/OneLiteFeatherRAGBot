@@ -3,6 +3,7 @@ from __future__ import annotations
 import time
 import argparse
 import logging
+import time as _time
 
 from discord_rag_bot.config import settings
 from discord_rag_bot.infrastructure.ai import build_ai_provider
@@ -38,6 +39,7 @@ def process_one(job_repo: JobRepository, service: RAGService) -> bool:
         return False
     log.info("Processing job #%d type=%s", job.id, job.type)
     try:
+        t0 = _time.perf_counter()
         # If payload references a prebuilt manifest, load it
         manifest_key = job.payload.get("artifact_key")
         if manifest_key:
@@ -141,9 +143,23 @@ def process_one(job_repo: JobRepository, service: RAGService) -> bool:
                 service.index_items(source.stream(), force=False, progress=lambda stage, **kw: progress(stage, **kw))
         progress("done", note="completed")
         asyncio.run(job_repo.complete(job.id))
+        # Metrics: duration and completed
+        try:
+            from rag_core.metrics import job_duration_seconds, jobs_completed_total
+
+            job_duration_seconds.labels(type=job.type).observe(_time.perf_counter() - t0)
+            jobs_completed_total.labels(status="completed", type=job.type).inc()
+        except Exception:
+            pass
         log.info("Job #%d completed", job.id)
     except Exception as e:
         asyncio.run(job_repo.fail(job.id, str(e)))
+        try:
+            from rag_core.metrics import jobs_completed_total
+
+            jobs_completed_total.labels(status="failed", type=job.type).inc()
+        except Exception:
+            pass
         log.exception("Job #%d failed: %s", job.id, e)
     return True
 
@@ -159,11 +175,7 @@ def main() -> None:
     if backend == "postgres":
         job_repo = PostgresJobRepository(db=settings.db)
     elif backend == "redis":
-        from rag_core.db.redis_jobs import RedisJobRepository
-
-        if not getattr(settings, "redis_url", None):
-            raise ValueError("APP_REDIS_URL is required when APP_JOB_BACKEND=redis")
-        job_repo = RedisJobRepository(url=settings.redis_url, namespace=getattr(settings, "redis_namespace", "rag"))
+        raise ValueError("Redis backend is no longer supported. Use postgres or rabbitmq.")
     elif backend == "rabbitmq":
         from rag_core.db.rabbitmq_jobs import RabbitMQJobRepository
 

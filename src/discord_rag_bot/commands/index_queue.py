@@ -17,6 +17,7 @@ from rag_core.etl.artifacts import LocalArtifactStore
 from rag_core.etl.artifacts_s3 import S3ArtifactStore, S3Unavailable
 from rag_core.etl.pipeline import build_manifest
 from pathlib import Path
+from rag_core.metrics import jobs_enqueued_total
 
 
 def _split_list(csv: Optional[str]) -> Optional[List[str]]:
@@ -110,6 +111,10 @@ class IndexQueueCog(commands.Cog):
         key = store.put_manifest(manifest)
         payload = {"artifact_key": key}
         job_id = await self.bot.services.job_repo.enqueue("ingest", payload)  # type: ignore[attr-defined]
+        try:
+            jobs_enqueued_total.labels(type="ingest").inc()
+        except Exception:
+            pass
         msg = await interaction.channel.send(f"Job #{job_id}: queued (github repo, manifest={key})")  # type: ignore[union-attr]
         await interaction.followup.send(f"Queued job #{job_id} for repo {repo}", ephemeral=True)
         self.bot.loop.create_task(self._watch_job(msg, job_id))
@@ -149,6 +154,10 @@ class IndexQueueCog(commands.Cog):
         key = store.put_manifest(manifest)
         payload = {"artifact_key": key}
         job_id = await self.bot.services.job_repo.enqueue("ingest", payload)  # type: ignore[attr-defined]
+        try:
+            jobs_enqueued_total.labels(type="ingest").inc()
+        except Exception:
+            pass
         msg = await interaction.channel.send(f"Job #{job_id}: queued (github org {org}, manifest={key})")  # type: ignore[union-attr]
         await interaction.followup.send(f"Queued job #{job_id} for org {org}", ephemeral=True)
         self.bot.loop.create_task(self._watch_job(msg, job_id))
@@ -182,6 +191,10 @@ class IndexQueueCog(commands.Cog):
         key = store.put_manifest(manifest)
         payload = {"artifact_key": key}
         job_id = await self.bot.services.job_repo.enqueue("ingest", payload)  # type: ignore[attr-defined]
+        try:
+            jobs_enqueued_total.labels(type="ingest").inc()
+        except Exception:
+            pass
         msg = await interaction.channel.send(f"Job #{job_id}: queued (local dir {repo_root}, manifest={key})")  # type: ignore[union-attr]
         await interaction.followup.send(f"Queued job #{job_id} for path {repo_root}", ephemeral=True)
         self.bot.loop.create_task(self._watch_job(msg, job_id))
@@ -236,6 +249,10 @@ class IndexQueueCog(commands.Cog):
         key = store.put_manifest(manifest)
         payload = {"artifact_key": key}
         job_id = await self.bot.services.job_repo.enqueue("ingest", payload)  # type: ignore[attr-defined]
+        try:
+            jobs_enqueued_total.labels(type="ingest").inc()
+        except Exception:
+            pass
         msg = await interaction.channel.send(f"Job #{job_id}: queued (web url, manifest={key})")  # type: ignore[union-attr]
         await interaction.followup.send(f"Queued job #{job_id} for {len(url_list)} URLs", ephemeral=True)
         self.bot.loop.create_task(self._watch_job(msg, job_id))
@@ -253,6 +270,10 @@ class IndexQueueCog(commands.Cog):
         key = store.put_manifest(manifest)
         payload = {"artifact_key": key}
         job_id = await self.bot.services.job_repo.enqueue("ingest", payload)  # type: ignore[attr-defined]
+        try:
+            jobs_enqueued_total.labels(type="ingest").inc()
+        except Exception:
+            pass
         msg = await interaction.channel.send(f"Job #{job_id}: queued (website {start_url}, manifest={key})")  # type: ignore[union-attr]
         await interaction.followup.send(f"Queued job #{job_id} to crawl {start_url}", ephemeral=True)
         self.bot.loop.create_task(self._watch_job(msg, job_id))
@@ -287,6 +308,10 @@ class IndexQueueCog(commands.Cog):
         key = store.put_manifest(manifest)
         payload = {"artifact_key": key}
         job_id = await self.bot.services.job_repo.enqueue("checksum_update", payload)  # type: ignore[attr-defined]
+        try:
+            jobs_enqueued_total.labels(type="checksum_update").inc()
+        except Exception:
+            pass
         msg = await interaction.channel.send(f"Job #{job_id}: queued (checksum github repo, manifest={key})")  # type: ignore[union-attr]
         await interaction.followup.send(f"Queued checksum-update job #{job_id} for repo {repo}", ephemeral=True)
         self.bot.loop.create_task(self._watch_job(msg, job_id))
@@ -304,6 +329,10 @@ class IndexQueueCog(commands.Cog):
         key = store.put_manifest(manifest)
         payload = {"artifact_key": key}
         job_id = await self.bot.services.job_repo.enqueue("checksum_update", payload)  # type: ignore[attr-defined]
+        try:
+            jobs_enqueued_total.labels(type="checksum_update").inc()
+        except Exception:
+            pass
         msg = await interaction.channel.send(f"Job #{job_id}: queued (checksum local dir {repo_root}, manifest={key})")  # type: ignore[union-attr]
         await interaction.followup.send(f"Queued checksum-update job #{job_id} for path {repo_root}", ephemeral=True)
         self.bot.loop.create_task(self._watch_job(msg, job_id))
@@ -321,6 +350,10 @@ class IndexQueueCog(commands.Cog):
         key = store.put_manifest(manifest)
         payload = {"artifact_key": key}
         job_id = await self.bot.services.job_repo.enqueue("checksum_update", payload)  # type: ignore[attr-defined]
+        try:
+            jobs_enqueued_total.labels(type="checksum_update").inc()
+        except Exception:
+            pass
         msg = await interaction.channel.send(f"Job #{job_id}: queued (checksum web url, manifest={key})")  # type: ignore[union-attr]
         await interaction.followup.send(f"Queued checksum-update job #{job_id} for {len(url_list)} URLs", ephemeral=True)
         self.bot.loop.create_task(self._watch_job(msg, job_id))
@@ -338,6 +371,10 @@ class IndexQueueCog(commands.Cog):
         key = store.put_manifest(manifest)
         payload = {"artifact_key": key}
         job_id = await self.bot.services.job_repo.enqueue("checksum_update", payload)  # type: ignore[attr-defined]
+        try:
+            jobs_enqueued_total.labels(type="checksum_update").inc()
+        except Exception:
+            pass
         msg = await interaction.channel.send(f"Job #{job_id}: queued (checksum website {start_url}, manifest={key})")  # type: ignore[union-attr]
         await interaction.followup.send(f"Queued checksum-update job #{job_id} to crawl {start_url}", ephemeral=True)
         self.bot.loop.create_task(self._watch_job(msg, job_id))
@@ -376,6 +413,10 @@ class IndexQueueCog(commands.Cog):
         key = store.put_manifest(manifest)
         payload = {"artifact_key": key, "prune_scope": {"metadata_repo_in": [repo]}}
         job_id = await self.bot.services.job_repo.enqueue("prune", payload)  # type: ignore[attr-defined]
+        try:
+            jobs_enqueued_total.labels(type="prune").inc()
+        except Exception:
+            pass
         msg = await interaction.channel.send(f"Job #{job_id}: queued (prune github repo, manifest={key})")  # type: ignore[union-attr]
         await interaction.followup.send(f"Queued prune job #{job_id} for repo {repo}", ephemeral=True)
         self.bot.loop.create_task(self._watch_job(msg, job_id))
@@ -395,6 +436,10 @@ class IndexQueueCog(commands.Cog):
         key = store.put_manifest(manifest)
         payload = {"artifact_key": key, "prune_scope": {"metadata_repo_in": [repo_url]}}
         job_id = await self.bot.services.job_repo.enqueue("prune", payload)  # type: ignore[attr-defined]
+        try:
+            jobs_enqueued_total.labels(type="prune").inc()
+        except Exception:
+            pass
         msg = await interaction.channel.send(f"Job #{job_id}: queued (prune local dir, manifest={key})")  # type: ignore[union-attr]
         await interaction.followup.send(f"Queued prune job #{job_id} for path {repo_root}", ephemeral=True)
         self.bot.loop.create_task(self._watch_job(msg, job_id))
@@ -415,6 +460,10 @@ class IndexQueueCog(commands.Cog):
         key = store.put_manifest(manifest)
         payload = {"artifact_key": key, "prune_scope": {"metadata_repo_from_manifest": True}}
         job_id = await self.bot.services.job_repo.enqueue("prune", payload)  # type: ignore[attr-defined]
+        try:
+            jobs_enqueued_total.labels(type="prune").inc()
+        except Exception:
+            pass
         msg = await interaction.channel.send(f"Job #{job_id}: queued (prune github org {org}, manifest={key})")  # type: ignore[union-attr]
         await interaction.followup.send(f"Queued prune job #{job_id} for org {org}", ephemeral=True)
         self.bot.loop.create_task(self._watch_job(msg, job_id))
@@ -434,6 +483,10 @@ class IndexQueueCog(commands.Cog):
         key = store.put_manifest(manifest)
         payload = {"artifact_key": key, "prune_scope": {"doc_id_in_from_manifest": True}}
         job_id = await self.bot.services.job_repo.enqueue("prune", payload)  # type: ignore[attr-defined]
+        try:
+            jobs_enqueued_total.labels(type="prune").inc()
+        except Exception:
+            pass
         msg = await interaction.channel.send(f"Job #{job_id}: queued (prune web url, manifest={key})")  # type: ignore[union-attr]
         await interaction.followup.send(f"Queued prune job #{job_id} for {len(url_list)} URLs", ephemeral=True)
         self.bot.loop.create_task(self._watch_job(msg, job_id))
@@ -451,6 +504,10 @@ class IndexQueueCog(commands.Cog):
         key = store.put_manifest(manifest)
         payload = {"artifact_key": key, "prune_scope": {"doc_id_prefixes": prefixes}}
         job_id = await self.bot.services.job_repo.enqueue("prune", payload)  # type: ignore[attr-defined]
+        try:
+            jobs_enqueued_total.labels(type="prune").inc()
+        except Exception:
+            pass
         msg = await interaction.channel.send(f"Job #{job_id}: queued (prune website {start_url}, manifest={key})")  # type: ignore[union-attr]
         await interaction.followup.send(f"Queued prune job #{job_id} to crawl {start_url}", ephemeral=True)
         self.bot.loop.create_task(self._watch_job(msg, job_id))

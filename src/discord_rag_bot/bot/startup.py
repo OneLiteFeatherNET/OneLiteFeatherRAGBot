@@ -35,11 +35,7 @@ def build_services() -> BotServices:
     if backend == "postgres":
         job_repo = PostgresJobRepository(db=settings.db)
     elif backend == "redis":
-        from rag_core.db.redis_jobs import RedisJobRepository
-
-        if not getattr(settings, "redis_url", None):
-            raise ValueError("APP_REDIS_URL is required when APP_JOB_BACKEND=redis")
-        job_repo = RedisJobRepository(url=settings.redis_url, namespace=getattr(settings, "redis_namespace", "rag"))
+        raise ValueError("Redis backend is no longer supported. Use postgres or rabbitmq.")
     elif backend == "rabbitmq":
         from rag_core.db.rabbitmq_jobs import RabbitMQJobRepository
 

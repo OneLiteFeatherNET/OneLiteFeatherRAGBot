@@ -10,6 +10,7 @@ from ..util.text import clip_discord_message
 from rag_core import RagResult
 from ..infrastructure.config_store import load_prompt_effective
 from ..infrastructure.gating import should_use_rag
+from rag_core.metrics import discord_messages_processed_total, rag_queries_total
 
 
 class ChatListenerCog(commands.Cog):
@@ -54,6 +55,10 @@ class ChatListenerCog(commands.Cog):
 
         if not (is_mention or is_reply_to_bot):
             return
+        try:
+            discord_messages_processed_total.inc()
+        except Exception:
+            pass
 
         # Build question by removing bot mention
         user_text = self._strip_bot_mention(message.content or "")
@@ -86,6 +91,10 @@ class ChatListenerCog(commands.Cog):
             )
             if not pre:
                 ans = self.bot.services.rag.answer_llm(question, system_prompt=prompt)  # type: ignore[attr-defined]
+                try:
+                    rag_queries_total.labels(mode="llm").inc()
+                except Exception:
+                    pass
                 return ans, []
 
             # 2) Wenn Heuristik RAG nahelegt: Retrieval ausführen und mit Score entscheiden
@@ -102,11 +111,20 @@ class ChatListenerCog(commands.Cog):
                 return str(res.answer), res.sources
             else:
                 ans = self.bot.services.rag.answer_llm(question, system_prompt=prompt)  # type: ignore[attr-defined]
+                try:
+                    rag_queries_total.labels(mode="llm").inc()
+                except Exception:
+                    pass
                 return ans, []
 
         # Send friendly placeholder reply and then edit when ready
         placeholder_msg = await message.reply("🧠 Einen kleinen Moment – ich suche passende Informationen und schreibe die Antwort …")
         answer, sources = await asyncio.to_thread(run_query)
+        if sources:
+            try:
+                rag_queries_total.labels(mode="rag").inc()
+            except Exception:
+                pass
         text = answer
         if sources:
             text += "\n\nSources:\n" + "\n".join(f"- {s}" for s in sources)

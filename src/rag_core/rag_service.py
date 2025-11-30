@@ -18,6 +18,8 @@ from .ingestion.filesystem import FilesystemSource
 from .ingestion.base import IngestItem
 from sqlalchemy import create_engine, select, func, MetaData, Table
 from .orm.session import create_engine_from_db
+from .metrics import rag_query_duration_seconds, rag_best_score, indexing_chunks_total
+import time
 
 
 @dataclass(frozen=True)
@@ -93,12 +95,14 @@ class RAGService:
         self._verify_embed_dim()
 
     def query(self, question: str, *, system_prompt: str | None = None) -> RagResult:
+        t0 = time.perf_counter()
         # When no vectors exist and fallback enabled → plain LLM
         if self._row_count is None:
             self._row_count = self._get_row_count()
         if not self._row_count and self.rag_config.fallback_to_llm:
             llm = self._select_llm(system_prompt)
             llm_resp = llm.complete(question)
+            rag_query_duration_seconds.observe(time.perf_counter() - t0)
             return RagResult(answer=str(llm_resp), sources=[])
 
         response = self._run_query_with_prompt(question, system_prompt)
@@ -110,6 +114,11 @@ class RAGService:
         best = self._best_score(response)
         if best is not None:
             self._log.debug("RAG best score=%s kind=%s", best, self.rag_config.score_kind)
+            try:
+                # For distance metrics, map to [0,1] roughly by 1/(1+d) if needed. Here we just record raw value.
+                rag_best_score.observe(float(best))
+            except Exception:
+                pass
 
         # Mix in a general LLM answer based on policy
         should_mix = False
@@ -127,6 +136,7 @@ class RAGService:
             llm_resp = llm.complete(question)
             text = f"{text}\n\n— General answer —\n{str(llm_resp)}"
 
+        rag_query_duration_seconds.observe(time.perf_counter() - t0)
         return RagResult(answer=text, sources=sources, best_score=best, score_kind=self.rag_config.score_kind)
 
     def answer_llm(self, question: str, *, system_prompt: str | None = None) -> str:
@@ -192,6 +202,10 @@ class RAGService:
             show_progress=True,
         )
         self._log.info("Indexed %d documents (chunks). Updating checksums ...", len(to_index))
+        try:
+            indexing_chunks_total.inc(len(to_index))
+        except Exception:
+            pass
         self._checksums.upsert_many(updates)
         self._log.info("Checksum update completed (%d records)", len(updates))
         if progress:

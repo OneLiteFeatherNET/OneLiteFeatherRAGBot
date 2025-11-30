@@ -48,9 +48,6 @@ class Settings(BaseSettings):
     s3_secret_access_key: Optional[str] = None
     # Job backend selection: postgres (default) | redis | rabbitmq
     job_backend: str = "postgres"
-    # Redis configuration (optional; used when job_backend=redis)
-    redis_url: Optional[str] = None  # e.g., redis://localhost:6379/0
-    redis_namespace: str = "rag"
     # RabbitMQ configuration (optional; used when job_backend=rabbitmq)
     rabbitmq_url: Optional[str] = None  # e.g., amqp://user:pass@localhost:5672/
     rabbitmq_queue: str = "rag_jobs"
