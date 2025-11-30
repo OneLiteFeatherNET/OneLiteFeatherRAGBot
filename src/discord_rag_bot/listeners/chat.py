@@ -263,7 +263,15 @@ class ChatListenerCog(commands.Cog):
             )
         except Exception:
             pass
-        answer, sources = await asyncio.to_thread(run_query)
+        try:
+            answer, sources = await asyncio.to_thread(run_query)
+        except Exception as e:
+            # Friendly fallback when LLM/backend fails
+            try:
+                await placeholder_msg.edit(content="⚠️ LLM backend not available at the moment. Please try again later.")
+            except Exception:
+                pass
+            return
         if sources:
             try:
                 rag_queries_total.labels(mode="rag").inc()

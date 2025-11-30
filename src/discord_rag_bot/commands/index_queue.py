@@ -33,6 +33,7 @@ class IndexQueueCog(commands.Cog):
 
     queue = app_commands.Group(name="queue", description="Manage indexing jobs", default_permissions=discord.Permissions(administrator=True))
     github = app_commands.Group(name="github", description="GitHub sources", parent=queue)
+    suggest = app_commands.Group(name="suggest", description="Suggestions", parent=queue)
     local = app_commands.Group(name="local", description="Local filesystem sources", parent=queue)
     web = app_commands.Group(name="web", description="Web sources (URLs, crawl)", parent=queue)
     checksum = app_commands.Group(name="checksum", description="Checksum-only update jobs", parent=queue)
@@ -83,7 +84,7 @@ class IndexQueueCog(commands.Cog):
             return False
         return app_commands.check(predicate)
 
-    @github.command(name="repo", description="Queue a GitHub repository for indexing")
+    @github.command(name="repo", description="Queue a GitHub repository for indexing (local clone preferred)")
     @require_admin()
     @app_commands.describe(
         repo="GitHub repo URL (e.g., https://github.com/ORG/REPO)",
@@ -100,24 +101,35 @@ class IndexQueueCog(commands.Cog):
         exts: Optional[str] = None,
         chunk_size: Optional[int] = None,
         chunk_overlap: Optional[int] = 200,
+        force: bool = False,
     ):
         await interaction.response.defer(ephemeral=True)
         exts_list = _split_list(exts) or settings.ingest_exts
-        await interaction.followup.send("Building manifest (GitHub repo)…", ephemeral=True)
-        source: object = GitRepoSource(repo_url=repo, branch=branch, exts=exts_list)
+        # Prefer local clone on worker for full repo indexing to avoid API limits
+        cfg: dict = {
+            "sources": [
+                {
+                    "type": "github_repo_local",
+                    "repo": repo,
+                    **({"branch": branch} if branch else {}),
+                    **({"exts": exts_list} if exts_list else {}),
+                    "shallow": True,
+                    "fetch_depth": 50,
+                }
+            ]
+        }
         if chunk_size:
-            source = ChunkingSource(source=source, chunk_size=chunk_size or 0, overlap=chunk_overlap or 200)  # type: ignore[arg-type]
-        manifest = await __import__("asyncio").to_thread(build_manifest, source)  # type: ignore[arg-type]
-        store = self._artifact_store()
-        key = store.put_manifest(manifest)
-        payload = {"artifact_key": key}
-        job_id = await self.bot.services.job_repo_factory.get("ingest").enqueue("ingest", payload)  # type: ignore[attr-defined]
+            cfg["chunk_size"] = int(chunk_size)
+            cfg["chunk_overlap"] = int(chunk_overlap or 200)
+        if force:
+            cfg["force"] = True
+        job_id = await self.bot.services.job_repo_factory.get("ingest").enqueue("ingest", cfg)  # type: ignore[attr-defined]
         try:
             jobs_enqueued_total.labels(type="ingest").inc()
         except Exception:
             pass
-        msg = await interaction.channel.send(f"Job #{job_id}: queued (github repo, manifest={key})")  # type: ignore[union-attr]
-        await interaction.followup.send(f"Queued job #{job_id} for repo {repo}", ephemeral=True)
+        msg = await interaction.channel.send(f"Job #{job_id}: queued (github repo local clone)")  # type: ignore[union-attr]
+        await interaction.followup.send(f"Queued job #{job_id} for repo {repo} (local clone)", ephemeral=True)
         self.bot.loop.create_task(self._watch_job(msg, job_id))
 
     @github.command(name="issues", description="Queue GitHub Issues eines Repos für das RAG")
@@ -177,6 +189,7 @@ class IndexQueueCog(commands.Cog):
         exts: Optional[str] = None,
         chunk_size: Optional[int] = None,
         chunk_overlap: Optional[int] = 200,
+        force: bool = False,
     ):
         await interaction.response.defer(ephemeral=True)
         exts_list = _split_list(exts) or settings.ingest_exts
@@ -188,6 +201,8 @@ class IndexQueueCog(commands.Cog):
         store = self._artifact_store()
         key = store.put_manifest(manifest)
         payload = {"artifact_key": key}
+        if force:
+            payload["force"] = True
         job_id = await self.bot.services.job_repo_factory.get("ingest").enqueue("ingest", payload)  # type: ignore[attr-defined]
         try:
             jobs_enqueued_total.labels(type="ingest").inc()
@@ -214,6 +229,7 @@ class IndexQueueCog(commands.Cog):
         exts: Optional[str] = None,
         chunk_size: Optional[int] = None,
         chunk_overlap: Optional[int] = 200,
+        force: bool = False,
     ):
         await interaction.response.defer(ephemeral=True)
         exts_list = _split_list(exts) or settings.ingest_exts
@@ -225,6 +241,8 @@ class IndexQueueCog(commands.Cog):
         store = self._artifact_store()
         key = store.put_manifest(manifest)
         payload = {"artifact_key": key}
+        if force:
+            payload["force"] = True
         job_id = await self.bot.services.job_repo_factory.get("ingest").enqueue("ingest", payload)  # type: ignore[attr-defined]
         try:
             jobs_enqueued_total.labels(type="ingest").inc()
@@ -273,8 +291,8 @@ class IndexQueueCog(commands.Cog):
 
     @web.command(name="url", description="Queue specific URLs for indexing")
     @require_admin()
-    @app_commands.describe(urls="Comma-separated list of URLs")
-    async def web_url(self, interaction: discord.Interaction, urls: str):
+    @app_commands.describe(urls="Comma-separated list of URLs", force="Force re-index (ignore checksums)")
+    async def web_url(self, interaction: discord.Interaction, urls: str, force: bool = False):
         await interaction.response.defer(ephemeral=True)
         url_list = [u.strip() for u in urls.split(",") if u.strip()]
         await interaction.followup.send("Building manifest (URLs)…", ephemeral=True)
@@ -283,6 +301,8 @@ class IndexQueueCog(commands.Cog):
         store = self._artifact_store()
         key = store.put_manifest(manifest)
         payload = {"artifact_key": key}
+        if force:
+            payload["force"] = True
         job_id = await self.bot.services.job_repo_factory.get("ingest").enqueue("ingest", payload)  # type: ignore[attr-defined]
         try:
             jobs_enqueued_total.labels(type="ingest").inc()
@@ -294,8 +314,8 @@ class IndexQueueCog(commands.Cog):
 
     @web.command(name="website", description="Queue a website crawl for indexing")
     @require_admin()
-    @app_commands.describe(start_url="Start URL", allowed_prefixes="Comma-separated URL prefixes", max_pages="Max pages to crawl (default 200)")
-    async def web_site(self, interaction: discord.Interaction, start_url: str, allowed_prefixes: str = "", max_pages: int = 200):
+    @app_commands.describe(start_url="Start URL", allowed_prefixes="Comma-separated URL prefixes", max_pages="Max pages to crawl (default 200)", force="Force re-index (ignore checksums)")
+    async def web_site(self, interaction: discord.Interaction, start_url: str, allowed_prefixes: str = "", max_pages: int = 200, force: bool = False):
         await interaction.response.defer(ephemeral=True)
         prefixes = [p.strip() for p in allowed_prefixes.split(",") if p.strip()] or [start_url]
         await interaction.followup.send("Building manifest (website)…", ephemeral=True)
@@ -304,6 +324,8 @@ class IndexQueueCog(commands.Cog):
         store = self._artifact_store()
         key = store.put_manifest(manifest)
         payload = {"artifact_key": key}
+        if force:
+            payload["force"] = True
         job_id = await self.bot.services.job_repo_factory.get("ingest").enqueue("ingest", payload)  # type: ignore[attr-defined]
         try:
             jobs_enqueued_total.labels(type="ingest").inc()
@@ -315,8 +337,8 @@ class IndexQueueCog(commands.Cog):
 
     @web.command(name="sitemap", description="Queue a sitemap for indexing")
     @require_admin()
-    @app_commands.describe(sitemap_url="Sitemap URL (XML)", limit="Optional limit of URLs to fetch")
-    async def web_sitemap(self, interaction: discord.Interaction, sitemap_url: str, limit: Optional[int] = None):
+    @app_commands.describe(sitemap_url="Sitemap URL (XML)", limit="Optional limit of URLs to fetch", force="Force re-index (ignore checksums)")
+    async def web_sitemap(self, interaction: discord.Interaction, sitemap_url: str, limit: Optional[int] = None, force: bool = False):
         await interaction.response.defer(ephemeral=True)
         await interaction.followup.send("Building manifest (sitemap)…", ephemeral=True)
         source = SitemapSource(sitemap_url=sitemap_url, limit=limit)
@@ -324,10 +346,31 @@ class IndexQueueCog(commands.Cog):
         store = LocalArtifactStore(root=Path(getattr(settings, "etl_staging_dir", ".staging")))
         key = store.put_manifest(manifest)
         payload = {"artifact_key": key}
+        if force:
+            payload["force"] = True
         job_id = await self.bot.services.job_repo_factory.get("ingest").enqueue("ingest", payload)  # type: ignore[attr-defined]
         msg = await interaction.channel.send(f"Job #{job_id}: queued (sitemap {sitemap_url}, manifest={key})")  # type: ignore[union-attr]
         await interaction.followup.send(f"Queued job #{job_id} for sitemap {sitemap_url}", ephemeral=True)
         self.bot.loop.create_task(self._watch_job(msg, job_id))
+
+    # Suggestions: list known repos and hint to re-index
+    @suggest.command(name="repos", description="List known repositories from the index with last update timestamps")
+    @app_commands.describe(limit="Max repositories to list (default 10)")
+    async def suggest_repos(self, interaction: discord.Interaction, limit: int = 10):
+        await interaction.response.defer(ephemeral=True)
+        try:
+            from ..tools.repo_tools import _group_repos_from_checksums
+            items = _group_repos_from_checksums()[: max(1, int(limit))]
+            if not items:
+                await interaction.followup.send("(no repositories found)", ephemeral=True)
+                return
+            lines = ["Known repositories (latest first):"]
+            for repo, count, last in items:
+                lines.append(f"- {repo} (docs: {count}, last: {last or '-'})")
+            lines.append("\nRe-index via: /queue github repo repo:<url> [branch] [exts] …")
+            await interaction.followup.send(clip_discord_message("\n".join(lines)), ephemeral=True)
+        except Exception as e:
+            await interaction.followup.send(f"Failed to list repositories: {e}", ephemeral=True)
 
     # Checksum-only jobs (ETL manifest built, then queued as checksum_update)
     @checksum.command(name="github_repo", description="Queue checksum-only update for a GitHub repository")

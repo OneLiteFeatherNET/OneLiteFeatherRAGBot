@@ -43,6 +43,7 @@ def process_one(job_repo: JobRepository, service: RAGService) -> bool:
         t0 = _time.perf_counter()
         # If payload references a prebuilt manifest, load it
         manifest_key = job.payload.get("artifact_key")
+        force_flag = bool(job.payload.get("force", False))
         if manifest_key:
             # Select artifact store (local or S3)
             backend = (getattr(settings, "etl_staging_backend", "local") or "local").lower()
@@ -124,9 +125,10 @@ def process_one(job_repo: JobRepository, service: RAGService) -> bool:
                         deleted += len(part)
                         progress("prune", total=len(to_delete), done=deleted, note=f"deleted {deleted}")
             else:
-                service.index_items(items_iter, force=False, progress=lambda stage, **kw: progress(stage, **kw))
+                service.index_items(items_iter, force=force_flag, progress=lambda stage, **kw: progress(stage, **kw))
         else:
             cfg = config_from_dict(job.payload)
+            force_flag = bool(job.payload.get("force", False))
             source = composite_from_config(cfg)
             if cfg.chunk_size:
                 source = ChunkingSource(source=source, chunk_size=cfg.chunk_size or 0, overlap=cfg.chunk_overlap or 200)
@@ -141,7 +143,7 @@ def process_one(job_repo: JobRepository, service: RAGService) -> bool:
             if job.type == "checksum_update":
                 service.update_checksums(source.stream(), progress=lambda stage, **kw: progress(stage, **kw))
             else:
-                service.index_items(source.stream(), force=False, progress=lambda stage, **kw: progress(stage, **kw))
+                service.index_items(source.stream(), force=force_flag, progress=lambda stage, **kw: progress(stage, **kw))
         progress("done", note="completed")
         asyncio.run(job_repo.complete(job.id))
         # Metrics: duration and completed

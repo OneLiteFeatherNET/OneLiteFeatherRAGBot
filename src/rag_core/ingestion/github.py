@@ -151,7 +151,8 @@ class GitHubIssuesSource(IngestionSource):
 
     def stream(self) -> Iterable[IngestItem]:
         log = logging.getLogger(__name__)
-        gh = Github(login_or_token=self.token) if self.token else Github()
+        token = self.token or os.getenv("GITHUB_TOKEN")
+        gh = Github(login_or_token=token) if token else Github()
         # Parse owner/repo from URL
         parts = self.repo_url.rstrip("/").split("/")
         owner, repo_name = parts[-2], parts[-1].removesuffix(".git")

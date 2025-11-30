@@ -46,10 +46,12 @@ class _BaseQueueTool(Tool):
     def __init__(self, enqueue_callable: Any) -> None:
         self._ctx = _QueueCtx(enqueue=enqueue_callable)
 
-    def _put_manifest_and_enqueue(self, manifest: dict) -> ToolResult:
+    def _put_manifest_and_enqueue(self, manifest: dict, *, force: bool = False) -> ToolResult:
         store = _artifact_store()
         key = store.put_manifest(manifest)
         payload = {"artifact_key": key}
+        if force:
+            payload["force"] = True
         # Enqueue on ingest queue
         job_id = asyncio.run(self._ctx.enqueue("ingest", payload))
         return ToolResult(content=f"queued ingest job #{job_id} (artifact={key})", raw={"job_id": job_id, "artifact_key": key})
@@ -65,7 +67,7 @@ class QueueWebUrlTool(_BaseQueueTool):
             return ToolResult(content="no urls provided")
         source = UrlSource(urls=urls)
         manifest = asyncio.run(asyncio.to_thread(build_manifest, source))
-        return self._put_manifest_and_enqueue(manifest)
+        return self._put_manifest_and_enqueue(manifest, force=bool(payload.get("force", False)))
 
 
 class QueueWebsiteTool(_BaseQueueTool):
@@ -80,7 +82,7 @@ class QueueWebsiteTool(_BaseQueueTool):
         max_pages = int(payload.get("max_pages") or 200)
         source = WebsiteCrawlerSource(start_urls=[start_url], allowed_prefixes=allowed, max_pages=max_pages)
         manifest = asyncio.run(asyncio.to_thread(build_manifest, source))
-        return self._put_manifest_and_enqueue(manifest)
+        return self._put_manifest_and_enqueue(manifest, force=bool(payload.get("force", False)))
 
 
 class QueueSitemapTool(_BaseQueueTool):
@@ -95,7 +97,7 @@ class QueueSitemapTool(_BaseQueueTool):
         lim = int(limit) if isinstance(limit, (int, str)) and str(limit).isdigit() else None
         source = SitemapSource(sitemap_url=sitemap_url, limit=lim)
         manifest = asyncio.run(asyncio.to_thread(build_manifest, source))
-        return self._put_manifest_and_enqueue(manifest)
+        return self._put_manifest_and_enqueue(manifest, force=bool(payload.get("force", False)))
 
 
 class QueueGithubRepoTool(_BaseQueueTool):
@@ -142,6 +144,8 @@ class QueueGithubRepoLocalTool(_BaseQueueTool):
         if payload.get("chunk_size"):
             cfg["chunk_size"] = int(payload["chunk_size"])  # type: ignore[index]
             cfg["chunk_overlap"] = int(payload.get("chunk_overlap") or 200)  # type: ignore[index]
+        if payload.get("force"):
+            cfg["force"] = True
 
         job_id = __import__("asyncio").run(self._ctx.enqueue("ingest", cfg))
         return ToolResult(content=f"queued local-clone ingest job #{job_id} for {repo}", raw={"job_id": job_id, "repo": repo})

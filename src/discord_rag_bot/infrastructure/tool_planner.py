@@ -11,12 +11,13 @@ _PLANNER_SYSTEM = (
     "- queue.web.url: {\"urls\": string[]}\n"
     "- queue.web.website: {\"start_url\": string, \"allowed_prefixes\"?: string[], \"max_pages\"?: number}\n"
     "- queue.web.sitemap: {\"sitemap_url\": string, \"limit\"?: number}\n"
+    "- queue.github.repo_local (preferred for full repos): {\"repo\": string, \"branch\"?: string, \"exts\"?: string[], \"chunk_size\"?: number, \"chunk_overlap\"?: number, \"shallow\"?: boolean, \"fetch_depth\"?: number}\n"
     "- queue.github.repo: {\"repo\": string, \"branch\"?: string, \"exts\"?: string[], \"chunk_size\"?: number, \"chunk_overlap\"?: number}\n"
     "- queue.github.org: {\"org\": string, \"visibility\"?: \"all\"|\"public\"|\"private\", \"include_archived\"?: boolean, \"topics\"?: string[], \"branch\"?: string, \"exts\"?: string[], \"chunk_size\"?: number, \"chunk_overlap\"?: number, \"limit\"?: number}\n"
     "If no tool is needed, respond with 'NONE' exactly.\n"
     "If a tool is needed, respond with a single fenced JSON block:\n"
     "```tool\\n{\"tool\":\"<name>\",\"payload\":{...}}\\n```\n"
-    "No extra text, no explanation."
+    "No extra text, no explanation. Prefer queue.github.repo_local for entire repositories; use issues APIs only with a token."
 )
 
 
@@ -59,4 +60,3 @@ async def maybe_execute_tool_from_text(bot, message, question: str) -> bool:
 
     asyncio.create_task(_run())
     return True
-

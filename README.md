@@ -83,8 +83,14 @@ Commands
   - `/version` returns version, commit, build date (also `GET /version` on health port)
 
 Natural‑language Tooling (Admin‑only)
-- Simply write “Reindex https://github.com/ORG/REPO on main, only .md and .py, chunk 2000/200.”
-- The LLM auto‑planner detects intent and triggers the matching queue tool. Supported: GitHub repo/org (batched per repo), URLs, website, sitemap, local dir.
+- Just write what you want. Examples the planner understands (no JSON needed):
+  - “Reindex https://github.com/ORG/REPO on main; only .md and .py; chunk 2000/200.”
+  - “Crawl https://docs.example.com limited to that site. Max 150 pages.”
+  - “Index this sitemap: https://example.com/sitemap.xml limit 500.”
+  - “For org ORG, index public repos with topic ‘docs’, only .md.”
+  - “Index my local repo at /data/repos/my-repo; public URL https://github.com/ORG/REPO.”
+- Add “force” to ignore checksums: “Reindex … force.”
+- The LLM auto‑planner triggers: GitHub repo/org (org → one job per repo), URLs, website, sitemap, local dir. Admin‑only by role/permissions.
 
 Helm Chart
 - Location: `charts/discord-rag-bot`
@@ -102,4 +108,3 @@ CI/Release
 
 License
 MIT — see `LICENSE`.
-

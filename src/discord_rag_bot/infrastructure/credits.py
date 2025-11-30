@@ -38,7 +38,7 @@ async def _ensure_async(conn: asyncpg.Connection) -> None:
         );
         CREATE TABLE IF NOT EXISTS bot_credit_user_limits (
             user_id BIGINT PRIMARY KEY,
-            limit INTEGER NOT NULL,
+            user_limit INTEGER NOT NULL,
             updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
         CREATE TABLE IF NOT EXISTS bot_credit_unlimited_roles (
@@ -231,8 +231,13 @@ def get_user_limit_override(user_id: int) -> Optional[int]:
         conn = await asyncpg.connect(_dsn())
         try:
             await _ensure_async(conn)
-            row = await conn.fetchrow("SELECT limit FROM bot_credit_user_limits WHERE user_id=$1", int(user_id))
-            return int(row[0]) if row else None
+            try:
+                row = await conn.fetchrow("SELECT user_limit FROM bot_credit_user_limits WHERE user_id=$1", int(user_id))
+                return int(row[0]) if row else None
+            except Exception:
+                # Backward compatibility if column was previously named reserved word "limit"
+                row = await conn.fetchrow("SELECT \"limit\" FROM bot_credit_user_limits WHERE user_id=$1", int(user_id))
+                return int(row[0]) if row else None
         finally:
             await conn.close()
 
@@ -244,14 +249,26 @@ def set_user_limit(user_id: int, limit: int) -> None:
         conn = await asyncpg.connect(_dsn())
         try:
             await _ensure_async(conn)
-            await conn.execute(
-                """
-                INSERT INTO bot_credit_user_limits(user_id, limit)
-                VALUES ($1, $2)
-                ON CONFLICT (user_id) DO UPDATE SET limit=EXCLUDED.limit, updated_at=NOW()
-                """,
-                int(user_id), int(limit)
-            )
+            # Try with new column name first; fallback for legacy column if needed
+            try:
+                await conn.execute(
+                    """
+                    INSERT INTO bot_credit_user_limits(user_id, user_limit)
+                    VALUES ($1, $2)
+                    ON CONFLICT (user_id) DO UPDATE SET user_limit=EXCLUDED.user_limit, updated_at=NOW()
+                    """,
+                    int(user_id), int(limit)
+                )
+            except Exception:
+                # Legacy fallback when the column was named "limit" (reserved keyword)
+                await conn.execute(
+                    """
+                    INSERT INTO bot_credit_user_limits(user_id, "limit")
+                    VALUES ($1, $2)
+                    ON CONFLICT (user_id) DO UPDATE SET "limit"=EXCLUDED."limit", updated_at=NOW()
+                    """,
+                    int(user_id), int(limit)
+                )
         finally:
             await conn.close()
 
