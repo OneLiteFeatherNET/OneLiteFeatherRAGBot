@@ -3,8 +3,8 @@ from __future__ import annotations
 import asyncio
 from typing import Dict, Optional, Tuple, List
 
-from sqlalchemy import Table, Column, String, MetaData, insert, select, delete
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import Table, Column, String, MetaData, select, delete
+from sqlalchemy.dialects.postgresql import JSONB, insert as pg_insert
 from sqlalchemy.engine import Engine
 
 from llama_index.core.storage.kvstore.types import BaseKVStore, DEFAULT_COLLECTION
@@ -40,7 +40,7 @@ class PostgresKVStore(BaseKVStore):
     def put(self, key: str, val: dict, collection: str = DEFAULT_COLLECTION) -> None:
         with self._engine.begin() as conn:
             stmt = (
-                insert(self._table)
+                pg_insert(self._table)
                 .values(collection=str(collection), key=str(key), value=val)
                 .on_conflict_do_update(
                     index_elements=[self._table.c.collection, self._table.c.key],
@@ -90,4 +90,3 @@ class PostgresKVStore(BaseKVStore):
 
     async def adelete(self, key: str, collection: str = DEFAULT_COLLECTION) -> bool:
         return await asyncio.to_thread(self.delete, key, collection)
-
