@@ -1,3 +1,16 @@
+## [1.1.0](https://github.com/OneLiteFeatherNET/OneLiteFeatherRAGBot/compare/v1.0.0...v1.1.0) (2025-11-30)
+
+### Features
+
+* **policy:** add response policy to decide thread/reply/mention and persist memory in thread; document env settings ([7ceec6e](https://github.com/OneLiteFeatherNET/OneLiteFeatherRAGBot/commit/7ceec6e2dfdf0db47725e444f22f0bb87b543938))
+* **tools:** add LLM auto-planner to detect and trigger tools from natural language (admin-only, no JSON required from user) ([9c3a61e](https://github.com/OneLiteFeatherNET/OneLiteFeatherRAGBot/commit/9c3a61ea8283a871f5dfed49c54f4c841f6f2bc3))
+* **tools:** add LLM-triggerable queue tools (web/github/local) with fenced JSON tool-calls and admin-only enforcement ([2d7580c](https://github.com/OneLiteFeatherNET/OneLiteFeatherRAGBot/commit/2d7580c437160bb6b2d49d1d443fe9f5a6d82a19))
+* **version:** expose build version via /version slash command and /version HTTP endpoint; pass build args in Docker builds ([64b6169](https://github.com/OneLiteFeatherNET/OneLiteFeatherRAGBot/commit/64b6169a3501d4a81d26634a019c4385d546d54b))
+
+### Bug Fixes
+
+* **tools:** import QueueGithubOrgTool in startup to register tool ([5cd785b](https://github.com/OneLiteFeatherNET/OneLiteFeatherRAGBot/commit/5cd785bd7f887e94ee64416b741c684cd2862677))
+
 ## 1.0.0 (2025-11-30)
 
 ### Features
