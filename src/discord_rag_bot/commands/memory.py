@@ -35,7 +35,12 @@ class MemoryCommands(commands.Cog):
 
         channel_id = interaction.channel.id if (scope == "channel" and hasattr(interaction.channel, "id")) else None
         try:
-            mem = self.bot.services.memory.get_context(user_id=int(target.id), channel_id=channel_id, limit=int(limit))  # type: ignore[attr-defined]
+            mem = await asyncio.to_thread(
+                self.bot.services.memory.get_context,  # type: ignore[attr-defined]
+                user_id=int(target.id),
+                channel_id=channel_id,
+                limit=int(limit),
+            )
         except Exception as e:
             await interaction.response.send_message(f"❌ Konnte Memory nicht laden: {e}", ephemeral=True)
             return
