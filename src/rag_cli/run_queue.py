@@ -169,7 +169,7 @@ def main() -> None:
 
         if not getattr(settings, "rabbitmq_url", None):
             raise ValueError("APP_RABBITMQ_URL is required when APP_JOB_BACKEND=rabbitmq")
-        job_repo = RabbitMQJobRepository(url=settings.rabbitmq_url, queue=getattr(settings, "rabbitmq_queue", "rag_jobs"))
+        job_repo = RabbitMQJobRepository(url=settings.rabbitmq_url, queue=getattr(settings, "rabbitmq_queue", "rag_jobs"), db=settings.db)
     else:
         raise ValueError(f"Unknown APP_JOB_BACKEND: {backend}")
     asyncio.run(job_repo.ensure())
