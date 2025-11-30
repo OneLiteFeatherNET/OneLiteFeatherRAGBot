@@ -83,7 +83,22 @@ class RAGService:
             table_name=vs_config.table_name,
             embed_dim=vs_config.embed_dim,
         )
-        self._storage_context = StorageContext.from_defaults(vector_store=self._vector_store)
+        # Optional LlamaIndex docstore persistence alongside PGVector
+        persist_dir: Optional[Path] = None
+        try:
+            from discord_rag_bot.config import settings as _settings  # lazy import
+            if getattr(_settings, "docstore_persist", True):
+                persist_dir = Path(getattr(_settings, "docstore_dir", ".staging/llama_storage"))
+                persist_dir.parent.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            persist_dir = None
+        if persist_dir:
+            self._storage_context = StorageContext.from_defaults(
+                vector_store=self._vector_store,
+                persist_dir=str(persist_dir),
+            )
+        else:
+            self._storage_context = StorageContext.from_defaults(vector_store=self._vector_store)
         self._index = VectorStoreIndex.from_vector_store(
             vector_store=self._vector_store,
             storage_context=self._storage_context,
@@ -206,6 +221,14 @@ class RAGService:
             storage_context=self._storage_context,
             show_progress=True,
         )
+        # Persist docstore/index metadata if enabled
+        try:
+            from discord_rag_bot.config import settings as _settings
+            if getattr(_settings, "docstore_persist", True):
+                pdir = Path(getattr(_settings, "docstore_dir", ".staging/llama_storage"))
+                self._storage_context.persist(str(pdir))
+        except Exception:
+            pass
         self._log.info("Indexed %d documents (chunks). Updating checksums ...", len(to_index))
         try:
             indexing_chunks_total.inc(len(to_index))

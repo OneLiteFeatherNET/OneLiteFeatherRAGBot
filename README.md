@@ -38,6 +38,7 @@ Configuration
   - Discord: `APP_DISCORD_TOKEN`, `APP_BOT_STATUS`, `APP_GUILD_IDS`, `APP_ENABLE_MESSAGE_CONTENT_INTENT`
   - Database: `APP_PG_HOST`, `APP_PG_PORT`, `APP_PG_USER`, `APP_PG_PASSWORD`, `APP_PG_DATABASE`
   - RAG store: `APP_TABLE_NAME`, `APP_EMBED_DIM`, `APP_TOP_K`
+  - LlamaIndex docstore persistence: `APP_DOCSTORE_PERSIST`, `APP_DOCSTORE_DIR` (persists doc/index metadata to disk; vectors remain in Postgres pgvector)
   - Provider: `APP_AI_PROVIDER` (openai|ollama|vllm), `APP_LLM_MODEL`, `APP_EMBED_MODEL`, `APP_EMBED_PROVIDER`, `APP_TEMPERATURE`
   - Health: `APP_HEALTH_HTTP_PORT`
   - Queue/ETL: `APP_JOB_BACKEND` (postgres|rabbitmq), `APP_RABBITMQ_URL`, `APP_QUEUE_WATCH_POLL_SEC`, `APP_ETL_STAGING_BACKEND` (local|s3) + `APP_S3_*`

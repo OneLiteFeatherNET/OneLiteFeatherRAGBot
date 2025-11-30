@@ -42,6 +42,9 @@ class Settings(BaseSettings):
     # ETL staging directory (for manifests)
     etl_staging_dir: str = ".staging"
     etl_staging_backend: str = "local"  # local|s3
+    # LlamaIndex docstore persistence (stores document/index metadata separate from vectors)
+    docstore_persist: bool = True
+    docstore_dir: str = ".staging/llama_storage"
     # S3 staging (optional, used when etl_staging_backend=s3)
     s3_staging_bucket: Optional[str] = None
     s3_staging_prefix: str = "rag-artifacts"
