@@ -2,15 +2,16 @@ OneLiteFeather Discord RAG Bot (pgvector + LlamaIndex)
 ======================================================
 
 Overview
-- Primary interface is a Discord bot that queries a Postgres/pgvector store directly — no REST layer.
-- Ingestion/Indexing is triggered via a Python CLI (one‑off or scheduled via cron).
-- Layered, maintainable architecture with a dedicated commands package and a provider abstraction (OpenAI, Ollama, vLLM).
-- docker‑compose provided for local testing with Postgres/pgvector (and optional Ollama).
-  - vLLM support via OpenAI‑compatible provider (configure `APP_AI_PROVIDER=vllm`).
+- Discord bot + queue-based worker ecosystem that talks directly to Postgres/pgvector for retrieval-based answers (no REST intermediary).
+- Queue jobs are delivered via RabbitMQ with Postgres metadata so multiple workers can scale horizontally; an indexing CLI is still available for ad-hoc runs.
+- Modular architecture: commands/listeners, DI services, provider abstraction (OpenAI, Ollama, vLLM) and built-in Prometheus metrics for Discord, RAG, and jobs.
+- docker-compose includes Postgres/pgvector and optional Ollama for local end-to-end testing.
+  - vLLM support via OpenAI-compatible provider (set `APP_AI_PROVIDER=vllm`).
 
 Services
-- bot: OneLiteFeather Discord bot with direct access to pgvector. Configurable presence and restrictive guild-specific command sync.
-- optional: `ollama` service for local LLM/embeddings (port 11434). Only needed when `APP_AI_PROVIDER=ollama`.
+- `bot`: Discord client with direct pgvector access, Postgres-stored prompts, optional health/metrics server, and role-based admin permissions (`APP_ADMIN_ROLE_*`).
+- `worker`: `rag-run-queue` consuming RabbitMQ jobs while Postgres keeps progress/status/history for `/queue list/show` and metrics.
+- Optional `ollama` container for local LLM/embeddings (port 11434) when `APP_AI_PROVIDER=ollama`.
 
 Code Structure
 - `src/discord_rag_bot/` – application layer for the bot
@@ -77,10 +78,8 @@ Environment (APP_ prefix)
 - OpenAI: `OPENAI_API_KEY` (when using `openai` provider)
 - vLLM: `APP_VLLM_BASE_URL`, optional `APP_VLLM_API_KEY`; choose embeddings via `APP_EMBED_PROVIDER` (`openai` | `ollama` | `vllm`). When `APP_EMBED_PROVIDER=vllm`, embeddings are requested via the vLLM OpenAI‑compatible `/embeddings` endpoint.
  - Logging: `APP_LOG_LEVEL` (DEBUG/INFO/...) for bot/CLI/worker
-- RAG behavior: `APP_RAG_FALLBACK_TO_LLM` (default true), `APP_RAG_MIX_LLM_WITH_RAG` (default false)
- - Mixing thresholds (optional):
-   - `APP_RAG_MIX_THRESHOLD` (float). With `APP_RAG_SCORE_KIND=similarity` (higher is better), mixing triggers when best_score < threshold. With `distance`, mixing triggers when best_score > threshold.
-   - `APP_RAG_SCORE_KIND` = `similarity` | `distance` (default `similarity`).
+- RAG behavior: driven by an LLM gating strategy (`APP_RAG_GATE_STRATEGY=llm`). The LLM reads the context and decides whether to use retrieval or respond plainly.
+- Hybrid/threshold mode: `APP_RAG_GATE_THRESHOLD` can still enforce retrieval when scores meet your configured threshold (useful for auto|hybrid modes).
 
 Quickstart (Docker Compose)
 1. Copy `.env.example` to `.env` and set required values.

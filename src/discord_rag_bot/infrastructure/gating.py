@@ -61,18 +61,10 @@ def should_use_rag(
     if strategy == "llm":
         return _llm_decide_use_rag(question, guild_name=guild_name, channel_name=channel_name)
 
-    # heuristic or hybrid fallback
-    q = (question or "").strip().lower()
-    if len(q) < max(1, int(settings.rag_min_question_len)):
-        return False
-
-    # If we already have a retrieval score, use threshold decision first (hybrid)
     gate_thr = settings.rag_gate_threshold if settings.rag_gate_threshold is not None else settings.rag_mix_threshold
     if best_score is not None and sources_count > 0 and gate_thr is not None:
         if score_kind == "similarity":
             return best_score >= float(gate_thr)
-        else:  # distance
-            return best_score <= float(gate_thr)
+        return best_score <= float(gate_thr)
 
-    # default heuristic very conservative: no RAG
     return False
