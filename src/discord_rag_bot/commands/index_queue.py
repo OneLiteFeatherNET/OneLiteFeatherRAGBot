@@ -47,7 +47,7 @@ class IndexQueueCog(commands.Cog):
             "chunk_size": chunk_size,
             "chunk_overlap": chunk_overlap,
         }
-        job_id = self.bot.services.job_store.enqueue("ingest", payload)  # type: ignore[attr-defined]
+        job_id = await self.bot.services.job_store.enqueue_async("ingest", payload)  # type: ignore[attr-defined]
         await interaction.followup.send(f"Queued job #{job_id} for repo {repo}", ephemeral=True)
 
     @app_commands.command(name="queue_github_org", description="Queue all repos in a GitHub org for indexing")
@@ -89,7 +89,7 @@ class IndexQueueCog(commands.Cog):
             "chunk_size": chunk_size,
             "chunk_overlap": chunk_overlap,
         }
-        job_id = self.bot.services.job_store.enqueue("ingest", payload)  # type: ignore[attr-defined]
+        job_id = await self.bot.services.job_store.enqueue_async("ingest", payload)  # type: ignore[attr-defined]
         await interaction.followup.send(f"Queued job #{job_id} for org {org}", ephemeral=True)
 
     @app_commands.command(name="queue_local_dir", description="Queue a local directory for indexing")
@@ -122,10 +122,9 @@ class IndexQueueCog(commands.Cog):
             "chunk_size": chunk_size,
             "chunk_overlap": chunk_overlap,
         }
-        job_id = self.bot.services.job_store.enqueue("ingest", payload)  # type: ignore[attr-defined]
+        job_id = await self.bot.services.job_store.enqueue_async("ingest", payload)  # type: ignore[attr-defined]
         await interaction.followup.send(f"Queued job #{job_id} for path {repo_root}", ephemeral=True)
 
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(IndexQueueCog(bot))
-

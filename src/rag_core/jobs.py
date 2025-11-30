@@ -53,19 +53,23 @@ class JobStore:
 
         asyncio.run(_run())
 
+    async def enqueue_async(self, job_type: str, payload: Dict[str, Any]) -> int:
+        conn = await asyncpg.connect(self._dsn())
+        try:
+            await self._ensure_table_async(conn)
+            row = await conn.fetchrow(
+                f"INSERT INTO {self.table} (type, payload) VALUES ($1, $2) RETURNING id",
+                job_type,
+                payload,
+            )
+            return int(row["id"])  # type: ignore[index]
+        finally:
+            await conn.close()
+
     def enqueue(self, job_type: str, payload: Dict[str, Any]) -> int:
+        """Synchronous wrapper for non-async contexts (e.g., CLI)."""
         async def _run() -> int:
-            conn = await asyncpg.connect(self._dsn())
-            try:
-                await self._ensure_table_async(conn)
-                row = await conn.fetchrow(
-                    f"INSERT INTO {self.table} (type, payload) VALUES ($1, $2) RETURNING id",
-                    job_type,
-                    payload,
-                )
-                return int(row["id"])  # type: ignore[index]
-            finally:
-                await conn.close()
+            return await self.enqueue_async(job_type, payload)
 
         return asyncio.run(_run())
 
@@ -125,4 +129,3 @@ class JobStore:
                 await conn.close()
 
         asyncio.run(_run())
-
