@@ -92,11 +92,25 @@ class RAGService:
                 persist_dir.parent.mkdir(parents=True, exist_ok=True)
         except Exception:
             persist_dir = None
-        if persist_dir:
-            self._storage_context = StorageContext.from_defaults(
-                vector_store=self._vector_store,
-                persist_dir=str(persist_dir),
-            )
+        # Optional IndexStore on Postgres via KVIndexStore
+        index_store = None
+        try:
+            from discord_rag_bot.config import settings as _settings
+            if (getattr(_settings, "indexstore_backend", "postgres") or "postgres").lower() == "postgres":
+                from llama_index.core.storage.index_store.keyval_index_store import KVIndexStore
+                from .kvstore_postgres import PostgresKVStore
+                kv = PostgresKVStore(db=self.vs_config.db, table_name=getattr(_settings, "indexstore_table", "llama_kv"))
+                index_store = KVIndexStore(kv)
+        except Exception:
+            index_store = None
+
+        if persist_dir or index_store is not None:
+            kwargs = {"vector_store": self._vector_store}
+            if persist_dir:
+                kwargs["persist_dir"] = str(persist_dir)
+            if index_store is not None:
+                kwargs["index_store"] = index_store
+            self._storage_context = StorageContext.from_defaults(**kwargs)
         else:
             self._storage_context = StorageContext.from_defaults(vector_store=self._vector_store)
         self._index = VectorStoreIndex.from_vector_store(

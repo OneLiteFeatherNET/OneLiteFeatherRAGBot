@@ -39,6 +39,8 @@ Configuration
   - Database: `APP_PG_HOST`, `APP_PG_PORT`, `APP_PG_USER`, `APP_PG_PASSWORD`, `APP_PG_DATABASE`
   - RAG store: `APP_TABLE_NAME`, `APP_EMBED_DIM`, `APP_TOP_K`
   - LlamaIndex docstore persistence: `APP_DOCSTORE_PERSIST`, `APP_DOCSTORE_DIR` (persists doc/index metadata to disk; vectors remain in Postgres pgvector)
+  - LlamaIndex index store: `APP_INDEXSTORE_BACKEND` (postgres|disk), `APP_INDEXSTORE_TABLE` (default `llama_kv`)
+    - postgres stores index structs in Postgres (JSONB) via a minimal KV store; disk uses files under `APP_DOCSTORE_DIR`.
   - Provider: `APP_AI_PROVIDER` (openai|ollama|vllm), `APP_LLM_MODEL`, `APP_EMBED_MODEL`, `APP_EMBED_PROVIDER`, `APP_TEMPERATURE`
   - Health: `APP_HEALTH_HTTP_PORT`
   - Queue/ETL: `APP_JOB_BACKEND` (postgres|rabbitmq), `APP_RABBITMQ_URL`, `APP_QUEUE_WATCH_POLL_SEC`, `APP_ETL_STAGING_BACKEND` (local|s3) + `APP_S3_*`
