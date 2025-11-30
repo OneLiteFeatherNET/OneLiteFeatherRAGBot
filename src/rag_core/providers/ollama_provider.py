@@ -20,3 +20,10 @@ class OllamaProvider(AIProvider):
 
         Settings.llm = Ollama(model=self.config.llm_model, temperature=self.config.temperature, base_url=self.base_url)
         Settings.embed_model = OllamaEmbedding(model_name=self.config.embedding_model, base_url=self.base_url)
+
+    def create_llm(self, *, system_prompt: str | None = None):
+        # Ollama LLM wrapper does not support a native system prompt parameter.
+        # We ignore system_prompt here or could prepend it to the user prompt upstream if needed.
+        from llama_index.llms.ollama import Ollama
+
+        return Ollama(model=self.config.llm_model, temperature=self.config.temperature, base_url=self.base_url)
