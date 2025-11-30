@@ -11,6 +11,13 @@ from rag_core.tools.registry import ToolsRegistry
 from ..infrastructure.config_store import ensure_store as ensure_config_store
 from ..infrastructure.config_store import migrate_prompts_files_to_db
 from ..infrastructure.memory_service import build_memory_service
+from ..tools.queue_tools import (
+    QueueWebUrlTool,
+    QueueWebsiteTool,
+    QueueSitemapTool,
+    QueueGithubRepoTool,
+    QueueLocalDirTool,
+)
 
 
 def build_services() -> BotServices:
@@ -47,6 +54,13 @@ def build_services() -> BotServices:
     # Build memory service (llamaindex-backed with persistence, fallback supported)
     memory = build_memory_service()
     tools = ToolsRegistry()
+    # Register queue tools; use the default ingest repo enqueue for now
+    enqueue_callable = job_repo_factory.get("ingest").enqueue
+    tools.register(QueueWebUrlTool(enqueue_callable))
+    tools.register(QueueWebsiteTool(enqueue_callable))
+    tools.register(QueueSitemapTool(enqueue_callable))
+    tools.register(QueueGithubRepoTool(enqueue_callable))
+    tools.register(QueueLocalDirTool(enqueue_callable))
     return BotServices(rag=rag, job_repo_factory=job_repo_factory, job_repo_default=default_job_repo, tools=tools, memory=memory)
 
 

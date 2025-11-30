@@ -12,6 +12,7 @@ from ..infrastructure.config_store import load_prompt_effective
 from ..infrastructure.gating import should_use_rag
 from ..infrastructure.language import get_language_hint
 from rag_core.metrics import discord_messages_processed_total, rag_queries_total
+from ..infrastructure.tool_invocation import extract_tool_call, can_run_tools_for_user
 from ..infrastructure.credits import estimate_credits_for_question, pre_authorize, adjust_usage, compute_user_policy
 from ..infrastructure.permissions import is_admin_member
 
@@ -230,6 +231,26 @@ class ChatListenerCog(commands.Cog):
         except Exception:
             # Fallback: send a fresh reply if edit fails
             await message.reply(clip_discord_message(text))
+
+        # Optional: detect and run a tool call embedded in the model answer (fenced JSON)
+        try:
+            tc = extract_tool_call(text)
+            if tc:
+                name, payload = tc
+                if can_run_tools_for_user(message.author):
+                    # run tool in background thread to avoid blocking loop
+                    import asyncio as _asyncio
+                    async def _run_tool():
+                        try:
+                            res = await _asyncio.to_thread(self.bot.services.tools.call, name, payload)  # type: ignore[attr-defined]
+                            await message.channel.send(f"🛠️ Tool '{name}' → {res.content}")  # type: ignore[union-attr]
+                        except Exception as e:
+                            await message.channel.send(f"🛠️ Tool '{name}' failed: {e}")  # type: ignore[union-attr]
+                    _asyncio.create_task(_run_tool())
+                else:
+                    await message.channel.send("⛔ You are not allowed to run tools here.")  # type: ignore[union-attr]
+        except Exception:
+            pass
         # Adjust credits after answer based on actual output length (best-effort)
         try:
             if reserved > 0:
