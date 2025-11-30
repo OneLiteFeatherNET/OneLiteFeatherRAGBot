@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, Optional
 import logging
 
 from llama_index.core import StorageContext, VectorStoreIndex
@@ -77,10 +77,20 @@ class RAGService:
         self._qe = self._index.as_query_engine(similarity_top_k=self.rag_config.top_k)
         self._log.info("RAGService initialized: table=%s embed_dim=%s top_k=%s", vs_config.table_name, vs_config.embed_dim, self.rag_config.top_k)
         self._checksums = ChecksumStore(db=vs_config.db)
+        self._row_count: Optional[int] = None
         # Verify existing table embedding dimension if table exists
         self._verify_embed_dim()
 
     def query(self, question: str) -> RagResult:
+        # Fallback: if no vectors indexed yet, answer with plain LLM
+        if self._row_count is None:
+            self._row_count = self._get_row_count()
+        if not self._row_count:
+            from llama_index.core import Settings
+
+            llm_resp = Settings.llm.complete(question)
+            return RagResult(answer=str(llm_resp), sources=[])
+
         response = self._qe.query(question)
         return RagResult(answer=str(response), sources=self._extract_sources(response))
 
@@ -122,6 +132,11 @@ class RAGService:
         self._log.info("Indexed %d documents (chunks). Updating checksums ...", len(to_index))
         self._checksums.upsert_many(updates)
         self._log.info("Checksum update completed (%d records)", len(updates))
+        # Best-effort update of cached row count
+        try:
+            self._row_count = (self._row_count or 0) + len(to_index)
+        except Exception:
+            self._row_count = None
 
     def _verify_embed_dim(self) -> None:
         """Ensure existing pgvector table has expected embedding dimension.
@@ -176,9 +191,35 @@ class RAGService:
                             self.vs_config.table_name,
                         )
                     )
+                # Also cache current row count
+                try:
+                    cnt_sql = text(f"SELECT COUNT(*) FROM public.{table_name}")
+                    self._row_count = int(conn.execute(cnt_sql).scalar() or 0)
+                except Exception:
+                    self._row_count = None
         except Exception as e:
             # If anything goes wrong, log and continue; core operations may still work
             self._log.debug("Embed dimension check encountered an issue: %s", e)
+
+    def _get_row_count(self) -> int:
+        table_name = f"data_{self.vs_config.table_name}"
+        try:
+            dsn = (
+                f"postgresql+psycopg2://{self.vs_config.db.user}:{self.vs_config.db.password}"
+                f"@{self.vs_config.db.host}:{self.vs_config.db.port}/{self.vs_config.db.database}"
+            )
+            engine = create_engine(dsn, pool_pre_ping=True)
+            with engine.connect() as conn:
+                exists_sql = text(
+                    "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public' AND table_name=:t"
+                )
+                exists = int(conn.execute(exists_sql, {"t": table_name}).scalar() or 0)
+                if not exists:
+                    return 0
+                cnt_sql = text(f"SELECT COUNT(*) FROM public.{table_name}")
+                return int(conn.execute(cnt_sql).scalar() or 0)
+        except Exception:
+            return 0
 
     @staticmethod
     def _extract_sources(response) -> list[str]:
