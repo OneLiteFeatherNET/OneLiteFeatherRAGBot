@@ -9,7 +9,7 @@ Overview
   - vLLM support via OpenAI‑compatible provider (configure `APP_AI_PROVIDER=vllm`).
 
 Services
-- bot: Discord bot with direct access to pgvector.
+- bot: Discord bot with direct access to pgvector. Configurable presence and guild-specific command sync for OneLiteFeather.
 - optional: `ollama` service for local LLM/embeddings (port 11434). Only needed when `APP_AI_PROVIDER=ollama`.
 
 Code Structure
@@ -57,6 +57,7 @@ Code Structure
 
 Environment (APP_ prefix)
 - Bot: `APP_DISCORD_TOKEN`
+- Bot UX: `APP_BOT_STATUS` (presence), optional `APP_GUILD_IDS` (JSON array for guild-scoped sync)
 - DB: `APP_PG_HOST`, `APP_PG_PORT`, `APP_PG_USER`, `APP_PG_PASSWORD`, `APP_PG_DATABASE`
 - RAG: `APP_TABLE_NAME`, `APP_EMBED_DIM`, `APP_TOP_K`
 - Provider selection: `APP_AI_PROVIDER` (`openai`|`ollama`|`vllm`), `APP_LLM_MODEL`, `APP_EMBED_MODEL`, `APP_TEMPERATURE`, optional `APP_OLLAMA_BASE_URL`
