@@ -34,8 +34,16 @@ class VLLMProvider(AIProvider):
                 model_name=self.config.embedding_model,
                 base_url=self.ollama_base_url,
             )
+        elif self.config.embed_backend == "vllm":
+            # Use OpenAIEmbedding pointed at vLLM's OpenAI-compatible /embeddings endpoint
+            from llama_index.embeddings.openai import OpenAIEmbedding
+
+            Settings.embed_model = OpenAIEmbedding(
+                model=self.config.embedding_model,
+                base_url=self.base_url,
+                api_key=self.api_key or "EMPTY",
+            )
         else:
             from llama_index.embeddings.openai import OpenAIEmbedding
 
             Settings.embed_model = OpenAIEmbedding(model=self.config.embedding_model)
-

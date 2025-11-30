@@ -62,7 +62,7 @@ Environment (APP_ prefix)
 - RAG: `APP_TABLE_NAME`, `APP_EMBED_DIM`, `APP_TOP_K`
 - Provider selection: `APP_AI_PROVIDER` (`openai`|`ollama`|`vllm`), `APP_LLM_MODEL`, `APP_EMBED_MODEL`, `APP_TEMPERATURE`, optional `APP_OLLAMA_BASE_URL`
 - OpenAI: `OPENAI_API_KEY` (when using `openai` provider)
-- vLLM: `APP_VLLM_BASE_URL`, optional `APP_VLLM_API_KEY`; choose embeddings via `APP_EMBED_PROVIDER` (`openai` or `ollama`).
+- vLLM: `APP_VLLM_BASE_URL`, optional `APP_VLLM_API_KEY`; choose embeddings via `APP_EMBED_PROVIDER` (`openai` | `ollama` | `vllm`). When `APP_EMBED_PROVIDER=vllm`, embeddings are requested via the vLLM OpenAI‑compatible `/embeddings` endpoint.
 
 Quickstart (Docker Compose)
 1. Copy `.env.example` to `.env` and set required values.
