@@ -195,6 +195,28 @@ class RAGService:
         except Exception:
             self._row_count = None
 
+    def update_checksums(self, items: Iterable[IngestItem], *, progress: Optional[callable] = None) -> None:
+        """Only update checksum records without re-indexing vectors.
+
+        Useful for ETL checksum refresh jobs.
+        """
+        records: list[ChecksumRecord] = []
+        total = 0
+        for it in items:
+            total += 1
+            records.append(ChecksumRecord(doc_id=it.doc_id, checksum=it.checksum))
+        if progress:
+            try:
+                progress("checksums", done=0, total=total, note="updating")
+            except Exception:
+                pass
+        self._checksums.upsert_many(records)
+        if progress:
+            try:
+                progress("done", done=total, total=total, note="checksums updated")
+            except Exception:
+                pass
+
     def _verify_embed_dim(self) -> None:
         """Ensure existing pgvector table has expected embedding dimension.
 

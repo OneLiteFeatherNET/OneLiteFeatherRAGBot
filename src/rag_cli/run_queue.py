@@ -35,7 +35,7 @@ def process_one(job_repo: JobRepository, service: RAGService) -> bool:
         return False
     log.info("Processing job #%d type=%s", job.id, job.type)
     try:
-        # If payload references a prebuilt manifest, load it and index; otherwise use config sources
+        # If payload references a prebuilt manifest, load it
         manifest_key = job.payload.get("artifact_key")
         if manifest_key:
             store = LocalArtifactStore(root=Path(getattr(settings, "etl_staging_dir", ".staging")))
@@ -46,7 +46,10 @@ def process_one(job_repo: JobRepository, service: RAGService) -> bool:
                     asyncio.run(job_repo.update_progress(job.id, done=done, total=total, note=note))
                 except Exception:
                     pass
-            service.index_items(items_iter, force=False, progress=lambda stage, **kw: progress(stage, **kw))
+            if job.type == "checksum_update":
+                service.update_checksums(items_iter, progress=lambda stage, **kw: progress(stage, **kw))
+            else:
+                service.index_items(items_iter, force=False, progress=lambda stage, **kw: progress(stage, **kw))
         else:
             cfg = config_from_dict(job.payload)
             source = composite_from_config(cfg)
@@ -60,7 +63,10 @@ def process_one(job_repo: JobRepository, service: RAGService) -> bool:
                     pass
 
             progress("scanning", note="starting")
-            service.index_items(source.stream(), force=False, progress=lambda stage, **kw: progress(stage, **kw))
+            if job.type == "checksum_update":
+                service.update_checksums(source.stream(), progress=lambda stage, **kw: progress(stage, **kw))
+            else:
+                service.index_items(source.stream(), force=False, progress=lambda stage, **kw: progress(stage, **kw))
         progress("done", note="completed")
         asyncio.run(job_repo.complete(job.id))
         log.info("Job #%d completed", job.id)

@@ -31,6 +31,7 @@ class IndexQueueCog(commands.Cog):
     github = app_commands.Group(name="github", description="GitHub sources", parent=queue)
     local = app_commands.Group(name="local", description="Local filesystem sources", parent=queue)
     web = app_commands.Group(name="web", description="Web sources (URLs, crawl)", parent=queue)
+    checksum = app_commands.Group(name="checksum", description="Checksum-only update jobs", parent=queue)
 
     async def _watch_job(self, message: discord.Message, job_id: int):
         import asyncio
@@ -231,6 +232,75 @@ class IndexQueueCog(commands.Cog):
         job_id = await self.bot.services.job_repo.enqueue("ingest", payload)  # type: ignore[attr-defined]
         msg = await interaction.channel.send(f"Job #{job_id}: queued (website {start_url}, manifest={key})")  # type: ignore[union-attr]
         await interaction.followup.send(f"Queued job #{job_id} to crawl {start_url}", ephemeral=True)
+        self.bot.loop.create_task(self._watch_job(msg, job_id))
+
+    # Checksum-only jobs (ETL manifest built, then queued as checksum_update)
+    @checksum.command(name="github_repo", description="Queue checksum-only update for a GitHub repository")
+    @admin_check.__func__()
+    @app_commands.describe(repo="GitHub repo URL", branch="Optional branch", exts="Comma-separated extensions")
+    async def checksum_github_repo(self, interaction: discord.Interaction, repo: str, branch: Optional[str] = None, exts: Optional[str] = None):
+        await interaction.response.defer(ephemeral=True)
+        exts_list = _split_list(exts) or settings.ingest_exts
+        await interaction.followup.send("Building manifest (GitHub repo)…", ephemeral=True)
+        source: object = GitRepoSource(repo_url=repo, branch=branch, exts=exts_list)
+        manifest = await __import__("asyncio").to_thread(build_manifest, source)  # type: ignore[arg-type]
+        store = LocalArtifactStore(root=Path(getattr(settings, "etl_staging_dir", ".staging")))
+        key = store.put_manifest(manifest)
+        payload = {"artifact_key": key}
+        job_id = await self.bot.services.job_repo.enqueue("checksum_update", payload)  # type: ignore[attr-defined]
+        msg = await interaction.channel.send(f"Job #{job_id}: queued (checksum github repo, manifest={key})")  # type: ignore[union-attr]
+        await interaction.followup.send(f"Queued checksum-update job #{job_id} for repo {repo}", ephemeral=True)
+        self.bot.loop.create_task(self._watch_job(msg, job_id))
+
+    @checksum.command(name="local_dir", description="Queue checksum-only update for a local directory")
+    @admin_check.__func__()
+    @app_commands.describe(repo_root="Local path", repo_url="Public URL for links", exts="Comma-separated extensions")
+    async def checksum_local_dir(self, interaction: discord.Interaction, repo_root: str, repo_url: str, exts: Optional[str] = None):
+        await interaction.response.defer(ephemeral=True)
+        exts_list = _split_list(exts) or settings.ingest_exts
+        await interaction.followup.send("Building manifest (local dir)…", ephemeral=True)
+        source: object = FilesystemSource(repo_root=Path(repo_root), repo_url=repo_url, exts=exts_list)
+        manifest = await __import__("asyncio").to_thread(build_manifest, source)  # type: ignore[arg-type]
+        store = LocalArtifactStore(root=Path(getattr(settings, "etl_staging_dir", ".staging")))
+        key = store.put_manifest(manifest)
+        payload = {"artifact_key": key}
+        job_id = await self.bot.services.job_repo.enqueue("checksum_update", payload)  # type: ignore[attr-defined]
+        msg = await interaction.channel.send(f"Job #{job_id}: queued (checksum local dir {repo_root}, manifest={key})")  # type: ignore[union-attr]
+        await interaction.followup.send(f"Queued checksum-update job #{job_id} for path {repo_root}", ephemeral=True)
+        self.bot.loop.create_task(self._watch_job(msg, job_id))
+
+    @checksum.command(name="web_url", description="Queue checksum-only update for specific URLs")
+    @admin_check.__func__()
+    @app_commands.describe(urls="Comma-separated list of URLs")
+    async def checksum_web_url(self, interaction: discord.Interaction, urls: str):
+        await interaction.response.defer(ephemeral=True)
+        url_list = [u.strip() for u in urls.split(",") if u.strip()]
+        await interaction.followup.send("Building manifest (URLs)…", ephemeral=True)
+        source = UrlSource(urls=url_list)
+        manifest = await __import__("asyncio").to_thread(build_manifest, source)
+        store = LocalArtifactStore(root=Path(getattr(settings, "etl_staging_dir", ".staging")))
+        key = store.put_manifest(manifest)
+        payload = {"artifact_key": key}
+        job_id = await self.bot.services.job_repo.enqueue("checksum_update", payload)  # type: ignore[attr-defined]
+        msg = await interaction.channel.send(f"Job #{job_id}: queued (checksum web url, manifest={key})")  # type: ignore[union-attr]
+        await interaction.followup.send(f"Queued checksum-update job #{job_id} for {len(url_list)} URLs", ephemeral=True)
+        self.bot.loop.create_task(self._watch_job(msg, job_id))
+
+    @checksum.command(name="website", description="Queue checksum-only update for a website section")
+    @admin_check.__func__()
+    @app_commands.describe(start_url="Start URL", allowed_prefixes="Comma-separated prefixes", max_pages="Max pages to crawl")
+    async def checksum_website(self, interaction: discord.Interaction, start_url: str, allowed_prefixes: str = "", max_pages: int = 200):
+        await interaction.response.defer(ephemeral=True)
+        prefixes = [p.strip() for p in allowed_prefixes.split(",") if p.strip()] or [start_url]
+        await interaction.followup.send("Building manifest (website)…", ephemeral=True)
+        source = WebsiteCrawlerSource(start_urls=[start_url], allowed_prefixes=prefixes, max_pages=max_pages)
+        manifest = await __import__("asyncio").to_thread(build_manifest, source)
+        store = LocalArtifactStore(root=Path(getattr(settings, "etl_staging_dir", ".staging")))
+        key = store.put_manifest(manifest)
+        payload = {"artifact_key": key}
+        job_id = await self.bot.services.job_repo.enqueue("checksum_update", payload)  # type: ignore[attr-defined]
+        msg = await interaction.channel.send(f"Job #{job_id}: queued (checksum website {start_url}, manifest={key})")  # type: ignore[union-attr]
+        await interaction.followup.send(f"Queued checksum-update job #{job_id} to crawl {start_url}", ephemeral=True)
         self.bot.loop.create_task(self._watch_job(msg, job_id))
 
     @queue.command(name="retry", description="Retry a failed or canceled job")

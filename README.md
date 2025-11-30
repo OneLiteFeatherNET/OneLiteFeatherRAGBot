@@ -137,3 +137,11 @@ Index queue from Discord
 - `/queue retry job_id:<id>` – retry failed/canceled job (admin only)
 - `/queue cancel job_id:<id>` – cancel pending/processing job (best‑effort, admin only)
 - Then run the worker: `uv run rag-run-queue --once` or as a long‑running process.
+
+Checksum-only updates
+- You can queue checksum refresh jobs without re-indexing vectors:
+  - `/queue checksum github_repo repo:<url> [branch] [exts]`
+  - `/queue checksum local_dir repo_root:<path> repo_url:<url> [exts]`
+  - `/queue checksum web_url urls:"https://a.com, https://b.com"`
+  - `/queue checksum website start_url:<url> [allowed_prefixes] [max_pages]`
+  - The bot builds an ETL manifest first and enqueues a `checksum_update` job. The worker loads the manifest and updates checksums only.
