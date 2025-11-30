@@ -1,5 +1,5 @@
-Discord RAG Bot (pgvector + LlamaIndex)
-=======================================
+OneLiteFeather Discord RAG Bot (pgvector + LlamaIndex)
+======================================================
 
 Overview
 - Primary interface is a Discord bot that queries a Postgres/pgvector store directly — no REST layer.
@@ -9,7 +9,7 @@ Overview
   - vLLM support via OpenAI‑compatible provider (configure `APP_AI_PROVIDER=vllm`).
 
 Services
-- bot: Discord bot with direct access to pgvector. Configurable presence and guild-specific command sync for OneLiteFeather.
+- bot: OneLiteFeather Discord bot with direct access to pgvector. Configurable presence and restrictive guild-specific command sync.
 - optional: `ollama` service for local LLM/embeddings (port 11434). Only needed when `APP_AI_PROVIDER=ollama`.
 
 Code Structure

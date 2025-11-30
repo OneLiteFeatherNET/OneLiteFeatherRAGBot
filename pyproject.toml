@@ -24,6 +24,7 @@ dependencies = [
 
 [project.scripts]
 discord-rag-bot = "discord_rag_bot:main"
+onelitefeather-rag-bot = "discord_rag_bot:main"
 rag-index = "rag_cli.index:main"
 
 [build-system]

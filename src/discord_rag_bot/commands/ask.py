@@ -13,7 +13,7 @@ class AskCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
-    @app_commands.command(name="ask", description="Ask about the org's code/docs (RAG via pgvector).")
+    @app_commands.command(name="ask", description="Ask OneLiteFeather code/docs (RAG via pgvector).")
     @app_commands.describe(question="Your question")
     async def ask(self, interaction: discord.Interaction, question: str):
         await interaction.response.defer(thinking=True)
