@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     bot_status: str | None = "OneLiteFeather RAG"
     guild_ids: list[int] = []  # optional, for guild-specific command sync
     enable_message_content_intent: bool = False  # required for mention/reply triggers in guilds
+    # Config backend for prompts/settings: db (default) or file
+    config_backend: str = "db"
     # RAG behavior
     rag_fallback_to_llm: bool = True
     rag_mix_llm_with_rag: bool = False
