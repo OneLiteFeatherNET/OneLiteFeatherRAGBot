@@ -85,5 +85,9 @@ jobs:
           platforms: linux/amd64
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            APP_BUILD_VERSION=${{ github.ref_type == 'tag' && github.ref_name || github.sha }}
+            APP_BUILD_COMMIT=${{ github.sha }}
+            APP_BUILD_DATE=${{ github.event.head_commit.timestamp || '' }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

@@ -13,6 +13,14 @@ async def _healthz(_request):
 
 async def _run_app(port: int):
     app = web.Application()
+    async def _version(_request):
+        try:
+            from .build_info import get_build_info
+            bi = get_build_info()
+            data = {"version": bi.version, "commit": bi.commit, "date": bi.date}
+        except Exception:
+            data = {"version": None, "commit": None, "date": None}
+        return web.json_response(data)
     async def _metrics(_request):
         data = generate_latest()
         return web.Response(body=data, headers={"Content-Type": CONTENT_TYPE_LATEST})
@@ -20,6 +28,7 @@ async def _run_app(port: int):
     app.add_routes([
         web.get("/healthz", _healthz),
         web.get("/readyz", _healthz),
+        web.get("/version", _version),
         web.get("/metrics", _metrics),
     ])
     runner = web.AppRunner(app)
