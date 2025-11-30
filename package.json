@@ -1,0 +1,17 @@
+{
+  "name": "discord-rag-bot-release",
+  "private": true,
+  "version": "0.0.0",
+  "description": "CI release tooling (semantic-release and plugins)",
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "semantic-release": "^24.0.0",
+    "@semantic-release/commit-analyzer": "^12.0.0",
+    "@semantic-release/release-notes-generator": "^12.0.0",
+    "@semantic-release/changelog": "^6.0.0",
+    "@semantic-release/git": "^12.0.0",
+    "@semantic-release/github": "^10.0.0",
+    "@semantic-release/exec": "^6.0.3"
+  }
+}
+
