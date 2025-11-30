@@ -16,3 +16,5 @@ wheels/
 
 # Local ETL/Prompt staging (manifests, prompts, etc.)
 .staging/
+
+node_modules/
