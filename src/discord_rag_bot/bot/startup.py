@@ -6,6 +6,7 @@ from .client import RagBot
 from .services import BotServices
 from rag_core import RAGService, VectorStoreConfig, RagConfig
 from rag_core.jobs import JobStore
+from rag_core.tools.registry import ToolsRegistry
 
 
 def build_services() -> BotServices:
@@ -20,12 +21,15 @@ def build_services() -> BotServices:
             top_k=settings.top_k,
             fallback_to_llm=settings.rag_fallback_to_llm,
             mix_llm_with_rag=settings.rag_mix_llm_with_rag,
+            mix_threshold=settings.rag_mix_threshold,
+            score_kind=settings.rag_score_kind,
         ),
         ai_provider=ai,
     )
     jobs = JobStore(db=settings.db)
     jobs.ensure_table()
-    return BotServices(rag=rag, job_store=jobs)
+    tools = ToolsRegistry()
+    return BotServices(rag=rag, job_store=jobs, tools=tools)
 
 
 def build_bot() -> RagBot:

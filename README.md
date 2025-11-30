@@ -64,7 +64,10 @@ Environment (APP_ prefix)
 - OpenAI: `OPENAI_API_KEY` (when using `openai` provider)
 - vLLM: `APP_VLLM_BASE_URL`, optional `APP_VLLM_API_KEY`; choose embeddings via `APP_EMBED_PROVIDER` (`openai` | `ollama` | `vllm`). When `APP_EMBED_PROVIDER=vllm`, embeddings are requested via the vLLM OpenAI‑compatible `/embeddings` endpoint.
  - Logging: `APP_LOG_LEVEL` (DEBUG/INFO/...) for bot/CLI/worker
- - RAG behavior: `APP_RAG_FALLBACK_TO_LLM` (default true), `APP_RAG_MIX_LLM_WITH_RAG` (default false)
+- RAG behavior: `APP_RAG_FALLBACK_TO_LLM` (default true), `APP_RAG_MIX_LLM_WITH_RAG` (default false)
+ - Mixing thresholds (optional):
+   - `APP_RAG_MIX_THRESHOLD` (float). With `APP_RAG_SCORE_KIND=similarity` (higher is better), mixing triggers when best_score < threshold. With `distance`, mixing triggers when best_score > threshold.
+   - `APP_RAG_SCORE_KIND` = `similarity` | `distance` (default `similarity`).
 
 Quickstart (Docker Compose)
 1. Copy `.env.example` to `.env` and set required values.

@@ -19,11 +19,20 @@ class IndexQueueCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
-    queue = app_commands.Group(name="queue", description="Manage indexing jobs")
+    queue = app_commands.Group(name="queue", description="Manage indexing jobs", default_permissions=discord.Permissions(administrator=True))
     github = app_commands.Group(name="github", description="GitHub sources", parent=queue)
     local = app_commands.Group(name="local", description="Local filesystem sources", parent=queue)
 
+    @staticmethod
+    def admin_check():
+        async def predicate(interaction: discord.Interaction) -> bool:
+            if isinstance(interaction.user, discord.Member):
+                return interaction.user.guild_permissions.administrator
+            return False
+        return app_commands.check(predicate)
+
     @github.command(name="repo", description="Queue a GitHub repository for indexing")
+    @admin_check.__func__()
     @app_commands.describe(
         repo="GitHub repo URL (e.g., https://github.com/ORG/REPO)",
         branch="Optional branch (default: default branch)",
@@ -57,6 +66,7 @@ class IndexQueueCog(commands.Cog):
         await interaction.followup.send(f"Queued job #{job_id} for repo {repo}", ephemeral=True)
 
     @github.command(name="org", description="Queue all repos in a GitHub org for indexing")
+    @admin_check.__func__()
     @app_commands.describe(
         org="GitHub organization name",
         visibility="Visibility filter (all|public|private)",
@@ -99,6 +109,7 @@ class IndexQueueCog(commands.Cog):
         await interaction.followup.send(f"Queued job #{job_id} for org {org}", ephemeral=True)
 
     @local.command(name="dir", description="Queue a local directory for indexing")
+    @admin_check.__func__()
     @app_commands.describe(
         repo_root="Local path to repository root on the indexer host",
         repo_url="Public URL used for source links",
@@ -132,6 +143,7 @@ class IndexQueueCog(commands.Cog):
         await interaction.followup.send(f"Queued job #{job_id} for path {repo_root}", ephemeral=True)
 
     @queue.command(name="list", description="List recent indexing jobs")
+    @admin_check.__func__()
     @app_commands.describe(status="Optional status filter (pending|processing|completed|failed)", limit="Max number of jobs to list (default 20)")
     async def list_jobs(self, interaction: discord.Interaction, status: Optional[str] = None, limit: int = 20):
         await interaction.response.defer(ephemeral=True)
@@ -146,6 +158,7 @@ class IndexQueueCog(commands.Cog):
         await interaction.followup.send(clip_discord_message("Jobs:\n" + "\n".join(lines)), ephemeral=True)
 
     @queue.command(name="show", description="Show details of a job")
+    @admin_check.__func__()
     @app_commands.describe(job_id="Job ID")
     async def show_job(self, interaction: discord.Interaction, job_id: int):
         await interaction.response.defer(ephemeral=True)
@@ -165,6 +178,28 @@ class IndexQueueCog(commands.Cog):
             f"payload:\n```json\n{payload}\n```"
         )
         await interaction.followup.send(clip_discord_message(text), ephemeral=True)
+
+    @queue.command(name="retry", description="Retry a failed or canceled job")
+    @admin_check.__func__()
+    @app_commands.describe(job_id="Job ID to retry")
+    async def retry_job(self, interaction: discord.Interaction, job_id: int):
+        await interaction.response.defer(ephemeral=True)
+        ok = await self.bot.services.job_store.retry_async(job_id)  # type: ignore[attr-defined]
+        if ok:
+            await interaction.followup.send(f"Job #{job_id} moved to pending.", ephemeral=True)
+        else:
+            await interaction.followup.send(f"Job #{job_id} not eligible for retry.", ephemeral=True)
+
+    @queue.command(name="cancel", description="Cancel a pending/processing job (best-effort)")
+    @admin_check.__func__()
+    @app_commands.describe(job_id="Job ID to cancel")
+    async def cancel_job(self, interaction: discord.Interaction, job_id: int):
+        await interaction.response.defer(ephemeral=True)
+        ok = await self.bot.services.job_store.cancel_async(job_id)  # type: ignore[attr-defined]
+        if ok:
+            await interaction.followup.send(f"Job #{job_id} canceled.", ephemeral=True)
+        else:
+            await interaction.followup.send(f"Job #{job_id} not cancelable (maybe already completed or failed).", ephemeral=True)
 
 
 async def setup(bot: commands.Bot):

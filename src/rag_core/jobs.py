@@ -222,3 +222,27 @@ class JobStore:
                 await conn.close()
 
         asyncio.run(_run())
+
+    async def retry_async(self, job_id: int) -> bool:
+        conn = await asyncpg.connect(self._dsn())
+        try:
+            await self._ensure_table_async(conn)
+            row = await conn.fetchrow(
+                f"UPDATE {self.table} SET status='pending', started_at=NULL, finished_at=NULL, error=NULL WHERE id=$1 AND status IN ('failed','canceled') RETURNING id",
+                job_id,
+            )
+            return row is not None
+        finally:
+            await conn.close()
+
+    async def cancel_async(self, job_id: int) -> bool:
+        conn = await asyncpg.connect(self._dsn())
+        try:
+            await self._ensure_table_async(conn)
+            row = await conn.fetchrow(
+                f"UPDATE {self.table} SET status='canceled', finished_at=NOW(), error=COALESCE(error,'canceled') WHERE id=$1 AND status IN ('pending','processing') RETURNING id",
+                job_id,
+            )
+            return row is not None
+        finally:
+            await conn.close()

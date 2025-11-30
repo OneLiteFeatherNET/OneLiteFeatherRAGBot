@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from rag_core import RAGService
+from rag_core.tools.registry import ToolsRegistry
 from rag_core.jobs import JobStore
 
 
@@ -10,3 +11,4 @@ from rag_core.jobs import JobStore
 class BotServices:
     rag: RAGService
     job_store: JobStore
+    tools: ToolsRegistry

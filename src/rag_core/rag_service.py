@@ -35,6 +35,8 @@ class RagConfig:
     top_k: int = 6
     fallback_to_llm: bool = True
     mix_llm_with_rag: bool = False
+    mix_threshold: Optional[float] = None  # if set, compare best score to this threshold
+    score_kind: str = "similarity"  # 'similarity' (higher is better) or 'distance' (lower is better)
 
 
 DEFAULT_EXTS = [
@@ -97,8 +99,23 @@ class RAGService:
         sources = self._extract_sources(response)
         text = str(response)
 
-        # Mix in a general LLM answer if requested and sources are scarce
-        if self.rag_config.mix_llm_with_rag and not sources:
+        # Determine best score if available
+        best = self._best_score(response)
+        if best is not None:
+            self._log.debug("RAG best score=%s kind=%s", best, self.rag_config.score_kind)
+
+        # Mix in a general LLM answer based on policy
+        should_mix = False
+        if self.rag_config.mix_llm_with_rag:
+            if not sources:
+                should_mix = True
+            elif self.rag_config.mix_threshold is not None and best is not None:
+                if self.rag_config.score_kind == "similarity":
+                    should_mix = best < float(self.rag_config.mix_threshold)
+                else:  # distance
+                    should_mix = best > float(self.rag_config.mix_threshold)
+
+        if should_mix:
             from llama_index.core import Settings
 
             llm_resp = Settings.llm.complete(question)
@@ -232,6 +249,22 @@ class RAGService:
                 return int(conn.execute(cnt_sql).scalar() or 0)
         except Exception:
             return 0
+
+    def _best_score(self, response) -> Optional[float]:
+        try:
+            nodes = getattr(response, "source_nodes", None) or []
+            scores: list[float] = []
+            for sn in nodes:
+                s = getattr(sn, "score", None)
+                if isinstance(s, (int, float)):
+                    scores.append(float(s))
+            if not scores:
+                return None
+            if self.rag_config.score_kind == "similarity":
+                return max(scores)
+            return min(scores)
+        except Exception:
+            return None
 
     @staticmethod
     def _extract_sources(response) -> list[str]:

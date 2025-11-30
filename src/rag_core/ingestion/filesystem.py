@@ -17,6 +17,7 @@ DEFAULT_EXTS = [
     ".toml",
     ".json",
     ".txt",
+    ".java"
 ]
 
 
