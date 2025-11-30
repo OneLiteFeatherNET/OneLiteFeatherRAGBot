@@ -70,7 +70,12 @@ class ChatListenerCog(commands.Cog):
         if is_reply_to_bot:
             ref_text = (ref_msg.content or "").strip() if ref_msg else ""
             if user_text and ref_text:
-                question = f"{user_text}\n\nContext (previous bot message):\n{ref_text}"
+                from ..config import settings as _settings
+                ctx_label = getattr(_settings, "reply_context_label", None) or ""
+                if ctx_label:
+                    question = f"{user_text}\n\n{ctx_label}\n{ref_text}"
+                else:
+                    question = f"{user_text}\n\n{ref_text}"
             elif user_text:
                 question = user_text
             else:
@@ -82,33 +87,57 @@ class ChatListenerCog(commands.Cog):
             # nothing to ask
             return
 
-        def _style_prompt(base: str | None, mem_summary: str | None, recent: list[tuple[str, str]]) -> str:
-            style = (
-                "Du antwortest hilfreich, prägnant und mit trockenem Sarkasmus, ohne unhöflich zu sein.\n"
-                "Nutze passende Discord-Emojis (z. B. 😅, 🤔, ✅, ❌, 🧠, 🔧, 📎), aber nicht übermäßig.\n"
-                "Wenn Daten fehlen, sag es ehrlich. Antworte in der Sprache des Nutzers.\n"
-            )
+        def _compose_prompt(base: str | None, mem_summary: str | None, recent: list[tuple[str, str]]) -> str:
+            from ..config import settings as _settings
+            style = getattr(_settings, "chat_style_append", None) or ""
             mem = ""
             if mem_summary:
-                mem += f"\nNutzerprofil (Zusammenfassung):\n{mem_summary}\n"
+                summary_hdr = getattr(_settings, "memory_summary_heading", None) if hasattr(_settings, "memory_summary_heading") else None  # type: ignore[attr-defined]
+                if not summary_hdr:
+                    summary_hdr = ""
+                else:
+                    summary_hdr = str(summary_hdr)
+                if summary_hdr:
+                    mem += f"\n{summary_hdr}\n{mem_summary}\n"
+                else:
+                    mem += f"\n{mem_summary}\n"
             if recent:
                 # Kurzer Kontext aus letzten Beiträgen
                 lines = []
                 for r, c in recent[-6:]:
-                    prefix = "User" if r == "user" else "Bot"
+                    user_pfx = getattr(_settings, "memory_user_prefix", None) if hasattr(_settings, "memory_user_prefix") else None  # type: ignore[attr-defined]
+                    bot_pfx = getattr(_settings, "memory_bot_prefix", None) if hasattr(_settings, "memory_bot_prefix") else None  # type: ignore[attr-defined]
+                    user_pfx = user_pfx or "User"
+                    bot_pfx = bot_pfx or "Bot"
+                    prefix = user_pfx if r == "user" else bot_pfx
                     lines.append(f"- {prefix}: {c[:300]}")
-                mem += "\nLetzte Unterhaltungsschritte:\n" + "\n".join(lines) + "\n"
+                recent_hdr = getattr(_settings, "memory_recent_heading", None) if hasattr(_settings, "memory_recent_heading") else None  # type: ignore[attr-defined]
+                if not recent_hdr:
+                    recent_hdr = ""
+                else:
+                    recent_hdr = str(recent_hdr)
+                if recent_hdr:
+                    mem += "\n" + recent_hdr + "\n" + "\n".join(lines) + "\n"
+                else:
+                    mem += "\n" + "\n".join(lines) + "\n"
             base = base or ""
-            return (base + "\n\n" + style + mem).strip()
+            return (base + ("\n\n" + style if style else "") + mem).strip()
 
         def run_query() -> tuple[str, list[str]]:
             base_prompt = load_prompt_effective(message.guild.id if message.guild else None, message.channel.id)
             # Load user memory via service (summary + recent channel messages)
             mem = self.bot.services.memory.get_context(user_id=message.author.id, channel_id=message.channel.id)  # type: ignore[attr-defined]
-            prompt = _style_prompt(base_prompt, mem.summary, mem.recent)
+            prompt = _compose_prompt(base_prompt, mem.summary, mem.recent)
             lang_hint = get_language_hint(question)
             if lang_hint:
-                prompt = f"{prompt}\n\nAntwortsprache: {lang_hint}"
+                from ..config import settings as _settings
+                tmpl = getattr(_settings, "language_hint_template", None)
+                if tmpl:
+                    try:
+                        hint = str(tmpl).format(lang=lang_hint)
+                        prompt = f"{prompt}\n\n{hint}"
+                    except Exception:
+                        pass
             # 1) Heuristik: Smalltalk etc. ohne teures Retrieval beantworten
             pre = should_use_rag(
                 question,
@@ -146,7 +175,9 @@ class ChatListenerCog(commands.Cog):
                 return ans, []
 
         # Send friendly placeholder reply and then edit when ready
-        placeholder_msg = await message.reply("🧠 Einen kleinen Moment – ich suche passende Informationen und schreibe die Antwort …")
+        from ..config import settings as _settings
+        placeholder = getattr(_settings, "reply_placeholder_text", None) or "…"
+        placeholder_msg = await message.reply(placeholder)
         # Credits: pre-authorize based on estimate (if enabled)
         est_credits = 0
         reserved = 0
@@ -167,7 +198,8 @@ class ChatListenerCog(commands.Cog):
                     # Pre-authorize in a thread to avoid event-loop blocking
                     ok, _, _ = await asyncio.to_thread(pre_authorize, int(message.author.id), int(est_credits), user_limit_override=int(user_limit))
                     if not ok:
-                        await placeholder_msg.edit(content="❌ Keine Credits mehr verfügbar (Limit oder globales Budget erreicht). Bitte später erneut versuchen.")
+                        no_credit_msg = getattr(_settings, "credits_exhausted_message", None) or "Credits exhausted"
+                        await placeholder_msg.edit(content=no_credit_msg)
                         return
                     reserved = est_credits
             except Exception:
@@ -190,7 +222,8 @@ class ChatListenerCog(commands.Cog):
                 pass
         text = answer
         if sources:
-            text += "\n\nSources:\n" + "\n".join(f"- {s}" for s in sources)
+            hdr = getattr(_settings, "sources_heading", None) or "Sources:"
+            text += "\n\n" + hdr + "\n" + "\n".join(f"- {s}" for s in sources)
 
         try:
             await placeholder_msg.edit(content=clip_discord_message(text))

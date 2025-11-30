@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import os
 from pathlib import Path
 from typing import Iterable, Optional
 import threading
@@ -134,7 +135,11 @@ class RAGService:
         if should_mix:
             llm = self._select_llm(system_prompt)
             llm_resp = llm.complete(question)
-            text = f"{text}\n\n— General answer —\n{str(llm_resp)}"
+            label = os.getenv("APP_RAG_MIX_LABEL")
+            if label:
+                text = f"{text}\n\n{label}\n{str(llm_resp)}"
+            else:
+                text = f"{text}\n\n{str(llm_resp)}"
 
         rag_query_duration_seconds.observe(time.perf_counter() - t0)
         return RagResult(answer=text, sources=sources, best_score=best, score_kind=self.rag_config.score_kind)

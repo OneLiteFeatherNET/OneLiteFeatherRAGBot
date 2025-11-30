@@ -87,6 +87,18 @@ class Settings(BaseSettings):
     pg_password: Optional[str] = None
     pg_database: Optional[str] = None
 
+    # UI/messages (make user-facing text configurable)
+    reply_placeholder_text: Optional[str] = None  # e.g., "🧠 Einen kleinen Moment …"
+    chat_style_append: Optional[str] = None  # extra style instructions appended to the system prompt
+    language_hint_template: Optional[str] = None  # e.g., "Antwortsprache: {lang}"
+    sources_heading: Optional[str] = None  # e.g., "Sources:" or "Quellen:"
+    reply_context_label: Optional[str] = None  # e.g., "Context (previous bot message):"
+    credits_exhausted_message: Optional[str] = None  # message when no credits available
+    memory_summary_heading: Optional[str] = None
+    memory_recent_heading: Optional[str] = None
+    memory_user_prefix: Optional[str] = None
+    memory_bot_prefix: Optional[str] = None
+
     # Credits & Budgeting
     credit_enabled: bool = False
     credit_period: str = "month"  # month|rolling
