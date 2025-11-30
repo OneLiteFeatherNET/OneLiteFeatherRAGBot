@@ -46,13 +46,28 @@ class IndexNowCog(commands.Cog):
     ):
         await interaction.response.defer(ephemeral=True, thinking=True)
         exts_list = _split_list(exts) or settings.ingest_exts
+        loop = asyncio.get_running_loop()
 
         def run():
             source = GitRepoSource(repo_url=repo, branch=branch, exts=exts_list)
-            self.bot.services.rag.index_items(source.stream(), force=force)  # type: ignore[attr-defined]
+
+            def progress(stage: str, *, done: int | None = None, total: int | None = None, note: str | None = None):
+                content = f"Indexing {repo}: {stage}"
+                if total is not None or done is not None:
+                    content += f" ({done or 0}/{total or '?'})"
+                if note:
+                    content += f" – {note}"
+                try:
+                    asyncio.run_coroutine_threadsafe(
+                        interaction.edit_original_response(content=content), loop
+                    )
+                except Exception:
+                    pass
+
+            self.bot.services.rag.index_items(source.stream(), force=force, progress=progress)  # type: ignore[attr-defined]
 
         await asyncio.to_thread(run)
-        await interaction.followup.send(f"Indexing completed for {repo} (force={force})", ephemeral=True)
+        await interaction.edit_original_response(content=f"Indexing completed for {repo} (force={force})")
 
     @group.command(name="local_dir", description="Index a local directory now (admin)")
     @admin_check.__func__()
@@ -67,15 +82,29 @@ class IndexNowCog(commands.Cog):
     ):
         await interaction.response.defer(ephemeral=True, thinking=True)
         exts_list = _split_list(exts) or settings.ingest_exts
+        loop = asyncio.get_running_loop()
 
         def run():
             source = FilesystemSource(repo_root=__import__("pathlib").Path(repo_root), repo_url=repo_url, exts=exts_list)
-            self.bot.services.rag.index_items(source.stream(), force=force)  # type: ignore[attr-defined]
+
+            def progress(stage: str, *, done: int | None = None, total: int | None = None, note: str | None = None):
+                content = f"Indexing {repo_root}: {stage}"
+                if total is not None or done is not None:
+                    content += f" ({done or 0}/{total or '?'})"
+                if note:
+                    content += f" – {note}"
+                try:
+                    asyncio.run_coroutine_threadsafe(
+                        interaction.edit_original_response(content=content), loop
+                    )
+                except Exception:
+                    pass
+
+            self.bot.services.rag.index_items(source.stream(), force=force, progress=progress)  # type: ignore[attr-defined]
 
         await asyncio.to_thread(run)
-        await interaction.followup.send(f"Indexing completed for {repo_root} (force={force})", ephemeral=True)
+        await interaction.edit_original_response(content=f"Indexing completed for {repo_root} (force={force})")
 
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(IndexNowCog(bot))
-

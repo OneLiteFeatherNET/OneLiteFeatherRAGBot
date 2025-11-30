@@ -42,6 +42,9 @@ class JobStore:
                 status TEXT NOT NULL DEFAULT 'pending',
                 attempts INT NOT NULL DEFAULT 0,
                 error TEXT,
+                progress_total INT,
+                progress_done INT,
+                progress_note TEXT,
                 created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                 started_at TIMESTAMPTZ,
                 finished_at TIMESTAMPTZ
@@ -49,6 +52,10 @@ class JobStore:
             CREATE INDEX IF NOT EXISTS {self.table}_status_idx ON {self.table}(status);
             """
         )
+        # Ensure new columns exist (for upgrades)
+        await conn.execute(f"ALTER TABLE {self.table} ADD COLUMN IF NOT EXISTS progress_total INT")
+        await conn.execute(f"ALTER TABLE {self.table} ADD COLUMN IF NOT EXISTS progress_done INT")
+        await conn.execute(f"ALTER TABLE {self.table} ADD COLUMN IF NOT EXISTS progress_note TEXT")
 
     def ensure_table(self) -> None:
         async def _run():
@@ -83,11 +90,11 @@ class JobStore:
     def fetch_and_start(self) -> Optional[Job]:
         async def _run() -> Optional[Job]:
             conn = await asyncpg.connect(self._dsn())
-            try:
-                await self._ensure_table_async(conn)
-                async with conn.transaction():
-                    row = await conn.fetchrow(
-                        f"""
+        try:
+            await self._ensure_table_async(conn)
+            async with conn.transaction():
+                row = await conn.fetchrow(
+                    f"""
                         WITH j AS (
                             SELECT id FROM {self.table}
                             WHERE status='pending'
@@ -99,12 +106,12 @@ class JobStore:
                         SET status='processing', started_at=NOW(), attempts = attempts + 1
                         FROM j
                         WHERE t.id = j.id
-                        RETURNING t.id, t.type, t.payload, t.status, t.attempts, t.error, t.created_at, t.started_at, t.finished_at
+                        RETURNING t.id, t.type, t.payload, t.status, t.attempts, t.error, t.created_at, t.started_at, t.finished_at, t.progress_done, t.progress_total, t.progress_note
                         """
-                    )
-                    if not row:
-                        return None
-                    payload = row["payload"]
+                )
+                if not row:
+                    return None
+                payload = row["payload"]
                     if isinstance(payload, str):
                         try:
                             payload = json.loads(payload)
@@ -171,7 +178,7 @@ class JobStore:
         try:
             await self._ensure_table_async(conn)
             r = await conn.fetchrow(
-                f"SELECT id, type, payload, status, attempts, error, created_at, started_at, finished_at FROM {self.table} WHERE id=$1",
+                f"SELECT id, type, payload, status, attempts, error, created_at, started_at, finished_at, progress_done, progress_total, progress_note FROM {self.table} WHERE id=$1",
                 job_id,
             )
             if not r:
@@ -244,5 +251,28 @@ class JobStore:
                 job_id,
             )
             return row is not None
+        finally:
+            await conn.close()
+
+    async def update_progress_async(self, job_id: int, *, done: int | None = None, total: int | None = None, note: str | None = None) -> None:
+        conn = await asyncpg.connect(self._dsn())
+        try:
+            await self._ensure_table_async(conn)
+            fields = []
+            values = []
+            if done is not None:
+                fields.append("progress_done=$1")
+                values.append(done)
+            if total is not None:
+                fields.append(f"progress_total=${len(values)+1}")
+                values.append(total)
+            if note is not None:
+                fields.append(f"progress_note=${len(values)+1}")
+                values.append(note)
+            if not fields:
+                return
+            sql = f"UPDATE {self.table} SET {', '.join(fields)} WHERE id=${len(values)+1}"
+            values.append(job_id)
+            await conn.execute(sql, *values)
         finally:
             await conn.close()

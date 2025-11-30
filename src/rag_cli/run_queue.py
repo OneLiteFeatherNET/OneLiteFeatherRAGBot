@@ -34,7 +34,18 @@ def process_one(job_store: JobStore, service: RAGService) -> bool:
         source = composite_from_config(cfg)
         if cfg.chunk_size:
             source = ChunkingSource(source=source, chunk_size=cfg.chunk_size or 0, overlap=cfg.chunk_overlap or 200)
-        service.index_items(source.stream())
+
+        def progress(stage: str, *, done: int | None = None, total: int | None = None, note: str | None = None):
+            try:
+                import asyncio
+
+                asyncio.run(job_store.update_progress_async(job.id, done=done, total=total, note=note))
+            except Exception:
+                pass
+
+        progress("scanning", note="starting")
+        service.index_items(source.stream(), force=False, progress=lambda stage, **kw: progress(stage, **kw))
+        progress("done", note="completed")
         job_store.complete(job.id)
         log.info("Job #%d completed", job.id)
     except Exception as e:
@@ -64,4 +75,3 @@ def main() -> None:
         processed = process_one(job_store, service)
         if not processed:
             time.sleep(args.poll)
-

@@ -133,15 +133,25 @@ class RAGService:
         source = FilesystemSource(repo_root=repo_root, repo_url=repo_url, exts=list(required_exts) if required_exts else None)
         self.index_items(source.stream())
 
-    def index_items(self, items: Iterable[IngestItem], *, force: bool = False) -> None:
-        """Index items with checksum skipping using a checksum store."""
+    def index_items(self, items: Iterable[IngestItem], *, force: bool = False, progress: Optional[callable] = None) -> None:
+        """Index items with checksum skipping using a checksum store.
+
+        progress: optional callback(stage, *, done=None, total=None, note=None)
+        """
         self._log.info("Loading checksum map ...")
         existing = self._checksums.load_map()
         self._log.info("Loaded %d checksum entries", len(existing))
 
         to_index: list[Document] = []
         updates: list[ChecksumRecord] = []
+        scanned = 0
+        if progress:
+            try:
+                progress("scanning", done=0, total=None, note="scanning items")
+            except Exception:
+                pass
         for item in items:
+            scanned += 1
             if not force and existing.get(item.doc_id) == item.checksum:
                 continue
             md = dict(item.metadata)
@@ -151,8 +161,20 @@ class RAGService:
 
         if not to_index:
             self._log.info("No changes detected. Skipping indexing.")
+            if progress:
+                try:
+                    progress("filtered", done=0, total=scanned, note="no changes")
+                    progress("done", done=0, total=scanned, note="no changes")
+                except Exception:
+                    pass
             return
 
+        if progress:
+            try:
+                progress("filtered", done=len(to_index), total=scanned, note="changed/new items")
+                progress("indexing", done=0, total=len(to_index), note="writing to vector store")
+            except Exception:
+                pass
         VectorStoreIndex.from_documents(
             to_index,
             storage_context=self._storage_context,
@@ -161,6 +183,12 @@ class RAGService:
         self._log.info("Indexed %d documents (chunks). Updating checksums ...", len(to_index))
         self._checksums.upsert_many(updates)
         self._log.info("Checksum update completed (%d records)", len(updates))
+        if progress:
+            try:
+                progress("indexed", done=len(to_index), total=len(to_index), note="completed")
+                progress("done", done=len(to_index), total=len(to_index), note="completed")
+            except Exception:
+                pass
         # Best-effort update of cached row count
         try:
             self._row_count = (self._row_count or 0) + len(to_index)
