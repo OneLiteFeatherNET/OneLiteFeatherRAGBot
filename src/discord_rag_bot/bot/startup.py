@@ -16,7 +16,11 @@ def build_services() -> BotServices:
             table_name=settings.table_name,
             embed_dim=settings.embed_dim,
         ),
-        rag_config=RagConfig(top_k=settings.top_k),
+        rag_config=RagConfig(
+            top_k=settings.top_k,
+            fallback_to_llm=settings.rag_fallback_to_llm,
+            mix_llm_with_rag=settings.rag_mix_llm_with_rag,
+        ),
         ai_provider=ai,
     )
     jobs = JobStore(db=settings.db)

@@ -13,7 +13,8 @@ class RagBot(commands.Bot):
         intents = discord.Intents.default()
         if getattr(settings, "enable_message_content_intent", False):
             intents.message_content = True
-        super().__init__(command_prefix=commands.when_mentioned_or("!"), intents=intents)
+        # Disable text-prefix commands by using mention-only prefix
+        super().__init__(command_prefix=commands.when_mentioned, intents=intents)
         self.services = services
         # cache allowed guild ids for restrictive sync/checks
         self._allowed_guild_ids = set(int(g) for g in (getattr(settings, "guild_ids", []) or []))
@@ -34,6 +35,11 @@ class RagBot(commands.Bot):
                 await self.tree.sync(guild=gobj)
         else:
             await self.tree.sync()
+
+    async def on_message(self, message: discord.Message):
+        """Do not process legacy prefix commands; only our listeners run."""
+        # Intentionally do not call process_commands to avoid treating first word as command
+        return
 
     async def on_ready(self):
         status = getattr(settings, "bot_status", None)

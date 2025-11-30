@@ -64,6 +64,7 @@ Environment (APP_ prefix)
 - OpenAI: `OPENAI_API_KEY` (when using `openai` provider)
 - vLLM: `APP_VLLM_BASE_URL`, optional `APP_VLLM_API_KEY`; choose embeddings via `APP_EMBED_PROVIDER` (`openai` | `ollama` | `vllm`). When `APP_EMBED_PROVIDER=vllm`, embeddings are requested via the vLLM OpenAI‑compatible `/embeddings` endpoint.
  - Logging: `APP_LOG_LEVEL` (DEBUG/INFO/...) for bot/CLI/worker
+ - RAG behavior: `APP_RAG_FALLBACK_TO_LLM` (default true), `APP_RAG_MIX_LLM_WITH_RAG` (default false)
 
 Quickstart (Docker Compose)
 1. Copy `.env.example` to `.env` and set required values.
@@ -105,6 +106,7 @@ Message-based Q&A (mention/reply)
 - You can trigger RAG answers by mentioning the bot or replying to the bot and writing a question.
 - Enable in `.env`: `APP_ENABLE_MESSAGE_CONTENT_INTENT=true` and enable the “Message Content Intent” in the Discord Developer Portal for your bot.
  - When replying to the bot, any text you add is treated as your question and the replied bot message is included as context automatically.
+ - Prefix commands are disabled intentionally; only slash commands and mentions/replies are supported.
 
 License
 MIT — see `LICENSE`.

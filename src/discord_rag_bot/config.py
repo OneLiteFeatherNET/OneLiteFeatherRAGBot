@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     bot_status: str | None = "OneLiteFeather RAG"
     guild_ids: list[int] = []  # optional, for guild-specific command sync
     enable_message_content_intent: bool = False  # required for mention/reply triggers in guilds
+    # RAG behavior
+    rag_fallback_to_llm: bool = True
+    rag_mix_llm_with_rag: bool = False
     # Ollama specific
     ollama_base_url: Optional[str] = None  # e.g. http://localhost:11434
     # vLLM (OpenAI-compatible) specific

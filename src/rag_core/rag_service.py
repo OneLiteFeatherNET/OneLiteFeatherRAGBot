@@ -33,6 +33,8 @@ class VectorStoreConfig:
 @dataclass(frozen=True)
 class RagConfig:
     top_k: int = 6
+    fallback_to_llm: bool = True
+    mix_llm_with_rag: bool = False
 
 
 DEFAULT_EXTS = [
@@ -82,17 +84,27 @@ class RAGService:
         self._verify_embed_dim()
 
     def query(self, question: str) -> RagResult:
-        # Fallback: if no vectors indexed yet, answer with plain LLM
+        # When no vectors exist and fallback enabled → plain LLM
         if self._row_count is None:
             self._row_count = self._get_row_count()
-        if not self._row_count:
+        if not self._row_count and self.rag_config.fallback_to_llm:
             from llama_index.core import Settings
 
             llm_resp = Settings.llm.complete(question)
             return RagResult(answer=str(llm_resp), sources=[])
 
         response = self._qe.query(question)
-        return RagResult(answer=str(response), sources=self._extract_sources(response))
+        sources = self._extract_sources(response)
+        text = str(response)
+
+        # Mix in a general LLM answer if requested and sources are scarce
+        if self.rag_config.mix_llm_with_rag and not sources:
+            from llama_index.core import Settings
+
+            llm_resp = Settings.llm.complete(question)
+            text = f"{text}\n\n— General answer —\n{str(llm_resp)}"
+
+        return RagResult(answer=text, sources=sources)
 
     def index_directory(
         self,
