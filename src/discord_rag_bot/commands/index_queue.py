@@ -62,7 +62,7 @@ class IndexQueueCog(commands.Cog):
         import asyncio
         poll = max(1.0, float(getattr(settings, "queue_watch_poll_sec", 5.0)))
         while True:
-            j = await self.bot.services.job_repo.get(job_id)  # type: ignore[attr-defined]
+            j = await self.bot.services.job_repo_default.get(job_id)  # type: ignore[attr-defined]
             if not j:
                 await message.edit(content=f"Job #{job_id} not found anymore.")
                 return
@@ -111,7 +111,7 @@ class IndexQueueCog(commands.Cog):
         store = self._artifact_store()
         key = store.put_manifest(manifest)
         payload = {"artifact_key": key}
-        job_id = await self.bot.services.job_repo.enqueue("ingest", payload)  # type: ignore[attr-defined]
+        job_id = await self.bot.services.job_repo_factory.get("ingest").enqueue("ingest", payload)  # type: ignore[attr-defined]
         try:
             jobs_enqueued_total.labels(type="ingest").inc()
         except Exception:
@@ -149,7 +149,7 @@ class IndexQueueCog(commands.Cog):
         store = self._artifact_store()
         key = store.put_manifest(manifest)
         payload = {"artifact_key": key}
-        job_id = await self.bot.services.job_repo.enqueue("ingest", payload)  # type: ignore[attr-defined]
+        job_id = await self.bot.services.job_repo_factory.get("ingest").enqueue("ingest", payload)  # type: ignore[attr-defined]
         msg = await interaction.channel.send(f"Job #{job_id}: queued (github issues {repo}, manifest={key})")  # type: ignore[union-attr]
         await interaction.followup.send(f"Queued job #{job_id} for issues in {repo}", ephemeral=True)
         self.bot.loop.create_task(self._watch_job(msg, job_id))
@@ -188,7 +188,7 @@ class IndexQueueCog(commands.Cog):
         store = self._artifact_store()
         key = store.put_manifest(manifest)
         payload = {"artifact_key": key}
-        job_id = await self.bot.services.job_repo.enqueue("ingest", payload)  # type: ignore[attr-defined]
+        job_id = await self.bot.services.job_repo_factory.get("ingest").enqueue("ingest", payload)  # type: ignore[attr-defined]
         try:
             jobs_enqueued_total.labels(type="ingest").inc()
         except Exception:
@@ -225,7 +225,7 @@ class IndexQueueCog(commands.Cog):
         store = self._artifact_store()
         key = store.put_manifest(manifest)
         payload = {"artifact_key": key}
-        job_id = await self.bot.services.job_repo.enqueue("ingest", payload)  # type: ignore[attr-defined]
+        job_id = await self.bot.services.job_repo_factory.get("ingest").enqueue("ingest", payload)  # type: ignore[attr-defined]
         try:
             jobs_enqueued_total.labels(type="ingest").inc()
         except Exception:
@@ -239,7 +239,7 @@ class IndexQueueCog(commands.Cog):
     @app_commands.describe(status="Optional status filter (pending|processing|completed|failed)", limit="Max number of jobs to list (default 20)")
     async def list_jobs(self, interaction: discord.Interaction, status: Optional[str] = None, limit: int = 20):
         await interaction.response.defer(ephemeral=True)
-        jobs = await self.bot.services.job_repo.list(limit=limit, status=status)  # type: ignore[attr-defined]
+        jobs = await self.bot.services.job_repo_default.list(limit=limit, status=status)  # type: ignore[attr-defined]
         if not jobs:
             await interaction.followup.send("No jobs found.", ephemeral=True)
             return
@@ -254,7 +254,7 @@ class IndexQueueCog(commands.Cog):
     @app_commands.describe(job_id="Job ID")
     async def show_job(self, interaction: discord.Interaction, job_id: int):
         await interaction.response.defer(ephemeral=True)
-        j = await self.bot.services.job_repo.get(job_id)  # type: ignore[attr-defined]
+        j = await self.bot.services.job_repo_default.get(job_id)  # type: ignore[attr-defined]
         if not j:
             await interaction.followup.send(f"Job #{job_id} not found.", ephemeral=True)
             return
@@ -283,7 +283,7 @@ class IndexQueueCog(commands.Cog):
         store = self._artifact_store()
         key = store.put_manifest(manifest)
         payload = {"artifact_key": key}
-        job_id = await self.bot.services.job_repo.enqueue("ingest", payload)  # type: ignore[attr-defined]
+        job_id = await self.bot.services.job_repo_factory.get("ingest").enqueue("ingest", payload)  # type: ignore[attr-defined]
         try:
             jobs_enqueued_total.labels(type="ingest").inc()
         except Exception:
@@ -304,7 +304,7 @@ class IndexQueueCog(commands.Cog):
         store = self._artifact_store()
         key = store.put_manifest(manifest)
         payload = {"artifact_key": key}
-        job_id = await self.bot.services.job_repo.enqueue("ingest", payload)  # type: ignore[attr-defined]
+        job_id = await self.bot.services.job_repo_factory.get("ingest").enqueue("ingest", payload)  # type: ignore[attr-defined]
         try:
             jobs_enqueued_total.labels(type="ingest").inc()
         except Exception:
@@ -324,7 +324,7 @@ class IndexQueueCog(commands.Cog):
         store = LocalArtifactStore(root=Path(getattr(settings, "etl_staging_dir", ".staging")))
         key = store.put_manifest(manifest)
         payload = {"artifact_key": key}
-        job_id = await self.bot.services.job_repo.enqueue("ingest", payload)  # type: ignore[attr-defined]
+        job_id = await self.bot.services.job_repo_factory.get("ingest").enqueue("ingest", payload)  # type: ignore[attr-defined]
         msg = await interaction.channel.send(f"Job #{job_id}: queued (sitemap {sitemap_url}, manifest={key})")  # type: ignore[union-attr]
         await interaction.followup.send(f"Queued job #{job_id} for sitemap {sitemap_url}", ephemeral=True)
         self.bot.loop.create_task(self._watch_job(msg, job_id))
@@ -342,7 +342,7 @@ class IndexQueueCog(commands.Cog):
         store = LocalArtifactStore(root=Path(getattr(settings, "etl_staging_dir", ".staging")))
         key = store.put_manifest(manifest)
         payload = {"artifact_key": key}
-        job_id = await self.bot.services.job_repo.enqueue("checksum_update", payload)  # type: ignore[attr-defined]
+        job_id = await self.bot.services.job_repo_factory.get("checksum_update").enqueue("checksum_update", payload)  # type: ignore[attr-defined]
         try:
             jobs_enqueued_total.labels(type="checksum_update").inc()
         except Exception:
@@ -362,7 +362,7 @@ class IndexQueueCog(commands.Cog):
         store = self._artifact_store()
         key = store.put_manifest(manifest)
         payload = {"artifact_key": key}
-        job_id = await self.bot.services.job_repo.enqueue("checksum_update", payload)  # type: ignore[attr-defined]
+        job_id = await self.bot.services.job_repo_factory.get("checksum_update").enqueue("checksum_update", payload)  # type: ignore[attr-defined]
         msg = await interaction.channel.send(f"Job #{job_id}: queued (checksum github issues, manifest={key})")  # type: ignore[union-attr]
         await interaction.followup.send(f"Queued checksum-update job #{job_id} for issues in {repo}", ephemeral=True)
         self.bot.loop.create_task(self._watch_job(msg, job_id))
@@ -379,7 +379,7 @@ class IndexQueueCog(commands.Cog):
         store = LocalArtifactStore(root=Path(getattr(settings, "etl_staging_dir", ".staging")))
         key = store.put_manifest(manifest)
         payload = {"artifact_key": key}
-        job_id = await self.bot.services.job_repo.enqueue("checksum_update", payload)  # type: ignore[attr-defined]
+        job_id = await self.bot.services.job_repo_factory.get("checksum_update").enqueue("checksum_update", payload)  # type: ignore[attr-defined]
         try:
             jobs_enqueued_total.labels(type="checksum_update").inc()
         except Exception:
@@ -400,7 +400,7 @@ class IndexQueueCog(commands.Cog):
         store = LocalArtifactStore(root=Path(getattr(settings, "etl_staging_dir", ".staging")))
         key = store.put_manifest(manifest)
         payload = {"artifact_key": key}
-        job_id = await self.bot.services.job_repo.enqueue("checksum_update", payload)  # type: ignore[attr-defined]
+        job_id = await self.bot.services.job_repo_factory.get("checksum_update").enqueue("checksum_update", payload)  # type: ignore[attr-defined]
         try:
             jobs_enqueued_total.labels(type="checksum_update").inc()
         except Exception:
@@ -421,7 +421,7 @@ class IndexQueueCog(commands.Cog):
         store = LocalArtifactStore(root=Path(getattr(settings, "etl_staging_dir", ".staging")))
         key = store.put_manifest(manifest)
         payload = {"artifact_key": key}
-        job_id = await self.bot.services.job_repo.enqueue("checksum_update", payload)  # type: ignore[attr-defined]
+        job_id = await self.bot.services.job_repo_factory.get("checksum_update").enqueue("checksum_update", payload)  # type: ignore[attr-defined]
         try:
             jobs_enqueued_total.labels(type="checksum_update").inc()
         except Exception:
@@ -441,7 +441,7 @@ class IndexQueueCog(commands.Cog):
         store = LocalArtifactStore(root=Path(getattr(settings, "etl_staging_dir", ".staging")))
         key = store.put_manifest(manifest)
         payload = {"artifact_key": key}
-        job_id = await self.bot.services.job_repo.enqueue("checksum_update", payload)  # type: ignore[attr-defined]
+        job_id = await self.bot.services.job_repo_factory.get("checksum_update").enqueue("checksum_update", payload)  # type: ignore[attr-defined]
         msg = await interaction.channel.send(f"Job #{job_id}: queued (checksum sitemap, manifest={key})")  # type: ignore[union-attr]
         await interaction.followup.send(f"Queued checksum-update job #{job_id} for sitemap {sitemap_url}", ephemeral=True)
         self.bot.loop.create_task(self._watch_job(msg, job_id))
@@ -463,7 +463,7 @@ class IndexQueueCog(commands.Cog):
         store = self._artifact_store()
         key = store.put_manifest(manifest)
         payload = {"artifact_key": key, "prune_scope": {"metadata_repo_in": [repo]}}
-        job_id = await self.bot.services.job_repo.enqueue("prune", payload)  # type: ignore[attr-defined]
+        job_id = await self.bot.services.job_repo_factory.get("prune").enqueue("prune", payload)  # type: ignore[attr-defined]
         try:
             jobs_enqueued_total.labels(type="prune").inc()
         except Exception:
@@ -486,7 +486,7 @@ class IndexQueueCog(commands.Cog):
         store = self._artifact_store()
         key = store.put_manifest(manifest)
         payload = {"artifact_key": key, "prune_scope": {"metadata_repo_in": [repo_url]}}
-        job_id = await self.bot.services.job_repo.enqueue("prune", payload)  # type: ignore[attr-defined]
+        job_id = await self.bot.services.job_repo_factory.get("prune").enqueue("prune", payload)  # type: ignore[attr-defined]
         try:
             jobs_enqueued_total.labels(type="prune").inc()
         except Exception:
@@ -510,7 +510,7 @@ class IndexQueueCog(commands.Cog):
         store = self._artifact_store()
         key = store.put_manifest(manifest)
         payload = {"artifact_key": key, "prune_scope": {"metadata_repo_from_manifest": True}}
-        job_id = await self.bot.services.job_repo.enqueue("prune", payload)  # type: ignore[attr-defined]
+        job_id = await self.bot.services.job_repo_factory.get("prune").enqueue("prune", payload)  # type: ignore[attr-defined]
         try:
             jobs_enqueued_total.labels(type="prune").inc()
         except Exception:
@@ -533,7 +533,7 @@ class IndexQueueCog(commands.Cog):
         store = self._artifact_store()
         key = store.put_manifest(manifest)
         payload = {"artifact_key": key, "prune_scope": {"doc_id_in_from_manifest": True}}
-        job_id = await self.bot.services.job_repo.enqueue("prune", payload)  # type: ignore[attr-defined]
+        job_id = await self.bot.services.job_repo_factory.get("prune").enqueue("prune", payload)  # type: ignore[attr-defined]
         try:
             jobs_enqueued_total.labels(type="prune").inc()
         except Exception:
@@ -554,7 +554,7 @@ class IndexQueueCog(commands.Cog):
         store = self._artifact_store()
         key = store.put_manifest(manifest)
         payload = {"artifact_key": key, "prune_scope": {"doc_id_prefixes": prefixes}}
-        job_id = await self.bot.services.job_repo.enqueue("prune", payload)  # type: ignore[attr-defined]
+        job_id = await self.bot.services.job_repo_factory.get("prune").enqueue("prune", payload)  # type: ignore[attr-defined]
         try:
             jobs_enqueued_total.labels(type="prune").inc()
         except Exception:
@@ -568,7 +568,7 @@ class IndexQueueCog(commands.Cog):
     @app_commands.describe(job_id="Job ID to retry")
     async def retry_job(self, interaction: discord.Interaction, job_id: int):
         await interaction.response.defer(ephemeral=True)
-        ok = await self.bot.services.job_repo.retry(job_id)  # type: ignore[attr-defined]
+        ok = await self.bot.services.job_repo_default.retry(job_id)  # type: ignore[attr-defined]
         if ok:
             await interaction.followup.send(f"Job #{job_id} moved to pending.", ephemeral=True)
         else:
@@ -579,7 +579,7 @@ class IndexQueueCog(commands.Cog):
     @app_commands.describe(job_id="Job ID to cancel")
     async def cancel_job(self, interaction: discord.Interaction, job_id: int):
         await interaction.response.defer(ephemeral=True)
-        ok = await self.bot.services.job_repo.cancel(job_id)  # type: ignore[attr-defined]
+        ok = await self.bot.services.job_repo_default.cancel(job_id)  # type: ignore[attr-defined]
         if ok:
             await interaction.followup.send(f"Job #{job_id} canceled.", ephemeral=True)
         else:

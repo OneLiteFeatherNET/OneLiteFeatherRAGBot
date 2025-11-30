@@ -11,6 +11,8 @@ Overview
 Services
 - `bot`: Discord client with direct pgvector access, Postgres-stored prompts, optional health/metrics server, and role-based admin permissions (`APP_ADMIN_ROLE_*`).
 - `worker`: `rag-run-queue` consuming RabbitMQ jobs while Postgres keeps progress/status/history for `/queue list/show` and metrics.
+Scaling is now queue-type-aware: start multiple `rag-run-queue` workers with `--queue-type ingest|checksum|prune` (or set `APP_WORKER_QUEUE_TYPE` per deployment) so each worker binds to the RabbitMQ queue defined by that job type (`APP_JOB_QUEUE_<TYPE>`).
+
 - Optional `ollama` container for local LLM/embeddings (port 11434) when `APP_AI_PROVIDER=ollama`.
 
 Scaling

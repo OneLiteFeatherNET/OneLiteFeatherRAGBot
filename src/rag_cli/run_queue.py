@@ -7,10 +7,10 @@ import time as _time
 
 from discord_rag_bot.config import settings
 from discord_rag_bot.infrastructure.ai import build_ai_provider
+from discord_rag_bot.job_repo import JobRepoFactory
 from rag_core import RAGService, VectorStoreConfig, RagConfig
 import asyncio
 from pathlib import Path
-from rag_core.db.postgres_jobs import PostgresJobRepository
 from rag_core.db.base import JobRepository
 from rag_core.logging import setup_logging
 from rag_core.ingestion.chunked import ChunkingSource
@@ -18,6 +18,7 @@ from rag_core.etl.artifacts import LocalArtifactStore
 from rag_core.etl.artifacts_s3 import S3ArtifactStore, S3Unavailable
 from rag_core.etl.pipeline import items_from_manifest
 from rag_cli.config_loader import config_from_dict, composite_from_config
+import os
 from sqlalchemy import select, delete, MetaData, Table, func
 from rag_core.orm.session import create_engine_from_db
 
@@ -164,27 +165,26 @@ def process_one(job_repo: JobRepository, service: RAGService) -> bool:
     return True
 
 
+def build_job_repo(queue_type: str) -> JobRepository:
+    backend = (getattr(settings, "job_backend", "postgres") or "postgres").lower()
+    if backend == "redis":
+        raise ValueError("Redis backend is no longer supported. Use postgres or rabbitmq.")
+    factory = JobRepoFactory(settings.db, backend)
+    repo = factory.get(queue_type)
+    asyncio.run(repo.ensure())
+    return repo
+
+
 def main() -> None:
     setup_logging()
     parser = argparse.ArgumentParser(description="Process pending indexing jobs from the queue")
     parser.add_argument("--once", action="store_true", help="Process a single job and exit")
     parser.add_argument("--poll", type=float, default=5.0, help="Polling interval in seconds")
+    parser.add_argument("--queue-type", type=str, default=os.getenv("APP_WORKER_QUEUE_TYPE", "ingest"), help="Queue type/job category this worker should process")
     args = parser.parse_args()
 
-    backend = (getattr(settings, "job_backend", "postgres") or "postgres").lower()
-    if backend == "postgres":
-        job_repo = PostgresJobRepository(db=settings.db)
-    elif backend == "redis":
-        raise ValueError("Redis backend is no longer supported. Use postgres or rabbitmq.")
-    elif backend == "rabbitmq":
-        from rag_core.db.rabbitmq_jobs import RabbitMQJobRepository
-
-        if not getattr(settings, "rabbitmq_url", None):
-            raise ValueError("APP_RABBITMQ_URL is required when APP_JOB_BACKEND=rabbitmq")
-        job_repo = RabbitMQJobRepository(url=settings.rabbitmq_url, queue=getattr(settings, "rabbitmq_queue", "rag_jobs"), db=settings.db)
-    else:
-        raise ValueError(f"Unknown APP_JOB_BACKEND: {backend}")
-    asyncio.run(job_repo.ensure())
+    queue_type = args.queue_type
+    job_repo = build_job_repo(queue_type)
     service = build_service()
 
     if args.once:
