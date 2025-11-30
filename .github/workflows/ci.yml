@@ -1,0 +1,26 @@
+name: Local CI (manual only)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.12
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+      - name: Run formatting checks
+        run: |
+          # placeholder for format/lint commands (add real commands later)
+          python -m compileall src
+      - name: Run tests
+        run: |
+          # placeholder test command
+          pytest --maxfail=1 --disable-warnings
