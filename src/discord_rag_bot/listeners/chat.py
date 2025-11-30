@@ -183,7 +183,8 @@ class ChatListenerCog(commands.Cog):
         # Summarize/update user memory asynchronously
         async def _update_summary_bg():
             try:
-                self.bot.services.memory.update_summary(  # type: ignore[attr-defined]
+                await asyncio.to_thread(
+                    self.bot.services.memory.update_summary,  # type: ignore[attr-defined]
                     user_id=message.author.id,
                     user_text=message.content or "",
                     bot_answer=text,
