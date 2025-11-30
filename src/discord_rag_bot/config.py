@@ -121,6 +121,15 @@ class Settings(BaseSettings):
     # Tools
     tools_auto_enable: bool = True  # let the LLM auto-plan tool usage from user text
 
+    # Response policy (thread/reply/mention)
+    policy_thread_enable: bool = True
+    policy_thread_min_chars: int = 400
+    policy_thread_when_sources: bool = True
+    policy_thread_name_template: str = "🔎 {short_question}"
+    policy_reply_prefer_reply: bool = True
+    policy_reply_mention: str = "auto"  # never|auto|always
+    policy_use_placeholder: bool = True
+
     @property
     def db(self) -> Db:
         if not all([self.pg_host, self.pg_user, self.pg_password, self.pg_database]):

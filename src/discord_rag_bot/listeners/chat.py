@@ -133,10 +133,13 @@ class ChatListenerCog(commands.Cog):
             base = base or ""
             return (base + ("\n\n" + style if style else "") + mem).strip()
 
+        # Memory channel selection (may switch to thread later)
+        mem_channel_id = message.channel.id if hasattr(message.channel, "id") else None
+
         def run_query() -> tuple[str, list[str]]:
             base_prompt = load_prompt_effective(message.guild.id if message.guild else None, message.channel.id)
             # Load user memory via service (summary + recent channel messages)
-            mem = self.bot.services.memory.get_context(user_id=message.author.id, channel_id=message.channel.id)  # type: ignore[attr-defined]
+            mem = self.bot.services.memory.get_context(user_id=message.author.id, channel_id=mem_channel_id)  # type: ignore[attr-defined]
             prompt = _compose_prompt(base_prompt, mem.summary, mem.recent)
             lang_hint = get_language_hint(question)
             if lang_hint:
@@ -184,10 +187,45 @@ class ChatListenerCog(commands.Cog):
                     pass
                 return ans, []
 
-        # Send friendly placeholder reply and then edit when ready
+        # Decide response target and send placeholder
+        try:
+            pre_expect_rag = should_use_rag(
+                question,
+                guild_name=message.guild.name if message.guild else None,
+                channel_name=message.channel.name if hasattr(message.channel, "name") else None,
+                best_score=None,
+                sources_count=0,
+            )
+        except Exception:
+            pre_expect_rag = False
+        user_is_admin = bool(isinstance(message.author, discord.Member) and message.author.guild_permissions.administrator)
+        policy = decide_response_policy(
+            message=message,
+            question=question,
+            is_reply_to_bot=is_reply_to_bot,
+            expecting_rag=bool(pre_expect_rag),
+            user_is_admin=user_is_admin,
+        )
         from ..config import settings as _settings
         placeholder = getattr(_settings, "reply_placeholder_text", None) or "…"
-        placeholder_msg = await message.reply(placeholder)
+        placeholder_msg: discord.Message
+        dest_thread: Optional[discord.Thread] = None
+        try:
+            if policy.target == "thread":
+                try:
+                    dest_thread = await message.create_thread(name=policy.thread_name or "Discussion")
+                    placeholder_msg = await dest_thread.send(placeholder)
+                    # Switch memory channel to thread id
+                    mem_channel_id = getattr(dest_thread, "id", None)
+                except Exception:
+                    placeholder_msg = await message.reply(placeholder, mention_author=policy.mention_user)
+            elif policy.target == "channel":
+                prefix = f"{message.author.mention} " if policy.mention_user else ""
+                placeholder_msg = await message.channel.send(prefix + placeholder)  # type: ignore[union-attr]
+            else:
+                placeholder_msg = await message.reply(placeholder, mention_author=policy.mention_user)
+        except Exception:
+            placeholder_msg = await message.reply(placeholder)
         # Credits: pre-authorize based on estimate (if enabled)
         est_credits = 0
         reserved = 0
@@ -219,7 +257,7 @@ class ChatListenerCog(commands.Cog):
             self.bot.services.memory.record_user_message(  # type: ignore[attr-defined]
                 user_id=message.author.id,
                 guild_id=message.guild.id if message.guild else None,
-                channel_id=message.channel.id if hasattr(message.channel, "id") else None,
+                channel_id=mem_channel_id,
                 content=message.content or "",
             )
         except Exception:
@@ -236,10 +274,11 @@ class ChatListenerCog(commands.Cog):
             text += "\n\n" + hdr + "\n" + "\n".join(f"- {s}" for s in sources)
 
         try:
-            await placeholder_msg.edit(content=clip_discord_message(text))
+            prefix = f"{message.author.mention} " if (policy.mention_user and policy.target == "channel") else ""
+            await placeholder_msg.edit(content=clip_discord_message(prefix + text))
         except Exception:
             # Fallback: send a fresh reply if edit fails
-            await message.reply(clip_discord_message(text))
+            await message.reply(clip_discord_message(text), mention_author=policy.mention_user)
 
         # Optional: detect and run a tool call embedded in the model answer (fenced JSON)
         try:
@@ -278,7 +317,7 @@ class ChatListenerCog(commands.Cog):
             self.bot.services.memory.record_assistant_message(  # type: ignore[attr-defined]
                 user_id=message.author.id,
                 guild_id=message.guild.id if message.guild else None,
-                channel_id=message.channel.id if hasattr(message.channel, "id") else None,
+                channel_id=mem_channel_id,
                 content=text,
             )
         except Exception:

@@ -137,3 +137,61 @@ class QueueLocalDirTool(_BaseQueueTool):
         manifest = asyncio.run(asyncio.to_thread(build_manifest, source))
         return self._put_manifest_and_enqueue(manifest)
 
+
+class QueueGithubOrgTool(_BaseQueueTool):
+    name = "queue.github.org"
+    description = (
+        "Queue all repos of a GitHub organization, one job per repo. "
+        "payload: { org: string, visibility?: 'all'|'public'|'private', include_archived?: boolean, topics?: string[], branch?: string, exts?: string[], chunk_size?: number, chunk_overlap?: number, limit?: number }"
+    )
+
+    def run(self, payload: Dict[str, Any]) -> ToolResult:
+        org = str(payload.get("org") or "").strip()
+        if not org:
+            return ToolResult(content="org required")
+        visibility = str(payload.get("visibility") or "all")
+        include_archived = bool(payload.get("include_archived") or False)
+        topics = [str(t) for t in (payload.get("topics") or []) if str(t).strip()] or None
+        exts = payload.get("exts")
+        exts_list = [str(e) for e in exts] if isinstance(exts, list) else getattr(settings, "ingest_exts", [])
+        branch = payload.get("branch")
+        chunk_size = payload.get("chunk_size")
+        chunk_overlap = payload.get("chunk_overlap") or 200
+        limit = int(payload.get("limit") or 0)
+
+        # Discover org repos (URLs)
+        org_src = GitHubOrgSource(
+            org=org,
+            visibility=visibility,
+            include_archived=include_archived,
+            topics=topics,
+            exts=exts_list,
+            branch=str(branch) if branch else None,
+            token=None,
+        )
+        urls = org_src._list_repo_urls()
+        if limit and limit > 0:
+            urls = urls[:limit]
+        if not urls:
+            return ToolResult(content=f"no repos found for org={org}")
+
+        job_ids: list[int] = []
+        # Queue a separate config payload per repo to let workers fetch content on demand
+        for u in urls:
+            cfg = {
+                "sources": [
+                    {
+                        "type": "github_repo",
+                        "repo": u,
+                        **({"branch": str(branch)} if branch else {}),
+                        **({"exts": exts_list} if exts_list else {}),
+                    }
+                ],
+            }
+            if chunk_size:
+                cfg["chunk_size"] = int(chunk_size)
+                cfg["chunk_overlap"] = int(chunk_overlap)
+            job_id = asyncio.run(self._ctx.enqueue("ingest", cfg))
+            job_ids.append(int(job_id))
+
+        return ToolResult(content=f"queued {len(job_ids)} repo jobs for org={org}", raw={"job_ids": job_ids, "org": org})
