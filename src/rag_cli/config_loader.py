@@ -67,3 +67,46 @@ def load_config(path: Path) -> IngestConfig:
 
 def composite_from_config(cfg: IngestConfig) -> IngestionSource:
     return CompositeSource(cfg.sources)
+
+
+def config_from_dict(data: dict) -> IngestConfig:
+    srcs: List[IngestionSource] = []
+    for item in data.get("sources", []):
+        t = (item.get("type") or "").lower()
+        if t == "local_dir":
+            srcs.append(
+                FilesystemSource(
+                    repo_root=Path(item["path"]).expanduser(),
+                    repo_url=item["repo_url"],
+                    exts=item.get("exts"),
+                )
+            )
+        elif t == "github_repo":
+            srcs.append(
+                GitRepoSource(
+                    repo_url=item["repo"],
+                    branch=item.get("branch"),
+                    exts=item.get("exts"),
+                    token=item.get("token"),
+                )
+            )
+        elif t == "github_org":
+            srcs.append(
+                GitHubOrgSource(
+                    org=item["org"],
+                    visibility=item.get("visibility", "all"),
+                    include_archived=bool(item.get("include_archived", False)),
+                    topics=item.get("topics"),
+                    exts=item.get("exts"),
+                    branch=item.get("branch"),
+                    token=item.get("token"),
+                )
+            )
+        else:
+            raise ValueError(f"Unknown source type: {t}")
+
+    return IngestConfig(
+        sources=srcs,
+        chunk_size=data.get("chunk_size"),
+        chunk_overlap=data.get("chunk_overlap"),
+    )

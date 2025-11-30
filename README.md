@@ -63,6 +63,7 @@ Environment (APP_ prefix)
 - Provider selection: `APP_AI_PROVIDER` (`openai`|`ollama`|`vllm`), `APP_LLM_MODEL`, `APP_EMBED_MODEL`, `APP_TEMPERATURE`, optional `APP_OLLAMA_BASE_URL`
 - OpenAI: `OPENAI_API_KEY` (when using `openai` provider)
 - vLLM: `APP_VLLM_BASE_URL`, optional `APP_VLLM_API_KEY`; choose embeddings via `APP_EMBED_PROVIDER` (`openai` | `ollama` | `vllm`). When `APP_EMBED_PROVIDER=vllm`, embeddings are requested via the vLLM OpenAI‑compatible `/embeddings` endpoint.
+ - Logging: `APP_LOG_LEVEL` (DEBUG/INFO/...) for bot/CLI/worker
 
 Quickstart (Docker Compose)
 1. Copy `.env.example` to `.env` and set required values.
@@ -72,6 +73,7 @@ Quickstart (Docker Compose)
    - Docker: `docker compose run --rm bot rag-index /data/repos/my-repo https://github.com/ORG/my-repo`
    - Config: `uv run rag-index --config ingest.yaml`
    - Enable chunking: add `--chunk-size 2000 --chunk-overlap 200` or set in YAML (`chunk_size`, `chunk_overlap`)
+   - Queue runner: `uv run rag-run-queue --once` (single job) or `uv run rag-run-queue` (daemon loop)
 4. Use `/ask <question>` in Discord. The bot queries pgvector directly.
 
 Checksum‑based reindexing
@@ -101,3 +103,9 @@ Extending the Bot
 
 License
 MIT — see `LICENSE`.
+  - `run_queue.py` – queue worker (`rag-run-queue`) that processes jobs created from Discord
+- Index queue from Discord
+  - `/queue_github_repo repo:<url> [branch] [exts] [chunk_size] [chunk_overlap]`
+  - `/queue_github_org org:<name> [visibility] [include_archived] [topics] [branch] [exts] [chunk_size] [chunk_overlap]`
+  - `/queue_local_dir repo_root:<path> repo_url:<url> [exts] [chunk_size] [chunk_overlap]`
+  - Then run the worker: `uv run rag-run-queue --once` or as a long‑running process.
