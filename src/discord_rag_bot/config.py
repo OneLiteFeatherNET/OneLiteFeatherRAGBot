@@ -126,6 +126,11 @@ class Settings(BaseSettings):
     embed_dim: int = 1536
     top_k: int = 6
 
+    # Estimation parameters (for /estimate commands)
+    estimate_tokens_per_sec: float = 2500.0  # approximate embedding throughput
+    estimate_db_writes_per_sec: float = 200.0  # approximate upsert rate
+    estimate_overhead_sec: float = 5.0  # fixed overhead per job
+
     # Database (required for RAG API service or direct DB usage)
     pg_host: Optional[str] = None
     pg_port: int = 5432
