@@ -1,3 +1,20 @@
+## [1.3.0](https://github.com/OneLiteFeatherNET/OneLiteFeatherRAGBot/compare/v1.2.0...v1.3.0) (2025-11-30)
+
+### Features
+
+* **config:** add Postgres options for ChatStore (APP_CHATSTORE_DSN) and DocStore (APP_DOCSTORE_BACKEND/TABLE); wire DocStore via Postgres KV when enabled; update env example and README ([160a548](https://github.com/OneLiteFeatherNET/OneLiteFeatherRAGBot/commit/160a548475de2054d9f57d2ad544a2f9cf84db9b))
+* **indexstore:** add Postgres-backed KV store for LlamaIndex IndexStore and wire via StorageContext (configurable backend/table) ([f5ac150](https://github.com/OneLiteFeatherNET/OneLiteFeatherRAGBot/commit/f5ac1501d1605df9deb9bc4e8c4629059a711f3c))
+* **llamaindex:** add persistent docstore via StorageContext (configurable APP_DOCSTORE_PERSIST/APP_DOCSTORE_DIR); keep chat memory on SQLChatStore (Postgres) ([7b3e776](https://github.com/OneLiteFeatherNET/OneLiteFeatherRAGBot/commit/7b3e7764ba54bae541ac0a422c8ee62450db323f))
+* **prompt:** shift system prompt to problem-solving assistant (diagnose → plan → steps → risks/validation) and add suggested template in .env.example ([bc16aa6](https://github.com/OneLiteFeatherNET/OneLiteFeatherRAGBot/commit/bc16aa6389891e22d606e5f19a5ab33f085ea504))
+
+### Bug Fixes
+
+* **docstore:** avoid FileNotFoundError on fresh start by only passing persist_dir when persisted files exist; still persist after indexing ([d8516c6](https://github.com/OneLiteFeatherNET/OneLiteFeatherRAGBot/commit/d8516c60f9c0a2b123ba94420bed6f564570d518))
+* **github-local-clone:** make branch checkout robust; clone default when requested branch fails; on existing clone try origin/<branch> and keep current if absent ([d392fae](https://github.com/OneLiteFeatherNET/OneLiteFeatherRAGBot/commit/d392faea85192abc7b59b3b8df0d1657847a86f5))
+* **github-org:** accept org username/URL; parse https://github.com/orgs/ORG and fallback to user repos on 404 ([12cc714](https://github.com/OneLiteFeatherNET/OneLiteFeatherRAGBot/commit/12cc714c60cce85ed3570eab6792891e586e68f5))
+* **github-org:** fallback to user repos when org lookup returns 404; show friendly error in slash command with access/token hint ([598ce55](https://github.com/OneLiteFeatherNET/OneLiteFeatherRAGBot/commit/598ce55d33d2788f4ef0d9e3707c9a732a671838))
+* **kvstore:** use PostgreSQL dialect insert for upsert (on_conflict_do_update) to avoid attribute error on generic Insert ([7a5d831](https://github.com/OneLiteFeatherNET/OneLiteFeatherRAGBot/commit/7a5d8314cc7f576fd844214c885e645a7dc17e08))
+
 ## [1.2.0](https://github.com/OneLiteFeatherNET/OneLiteFeatherRAGBot/compare/v1.1.0...v1.2.0) (2025-11-30)
 
 ### Features
