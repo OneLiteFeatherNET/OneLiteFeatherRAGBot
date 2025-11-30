@@ -430,12 +430,17 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "asyncpg" },
+    { name = "beautifulsoup4" },
     { name = "discord-py" },
     { name = "llama-index" },
+    { name = "llama-index-embeddings-ollama" },
     { name = "llama-index-embeddings-openai" },
+    { name = "llama-index-llms-ollama" },
     { name = "llama-index-llms-openai" },
     { name = "llama-index-vector-stores-postgres" },
     { name = "pydantic-settings" },
+    { name = "pyyaml" },
+    { name = "requests" },
     { name = "sqlalchemy" },
 ]
 
@@ -452,12 +457,17 @@ test = [
 [package.metadata]
 requires-dist = [
     { name = "asyncpg", specifier = ">=0.31.0" },
+    { name = "beautifulsoup4", specifier = ">=4.12.3" },
     { name = "discord-py", specifier = ">=2.6.4" },
     { name = "llama-index", specifier = ">=0.14.8" },
+    { name = "llama-index-embeddings-ollama", specifier = ">=0.3.0" },
     { name = "llama-index-embeddings-openai", specifier = ">=0.5.1" },
+    { name = "llama-index-llms-ollama", specifier = ">=0.4.0" },
     { name = "llama-index-llms-openai", specifier = ">=0.6.10" },
     { name = "llama-index-vector-stores-postgres", specifier = ">=0.7.2" },
     { name = "pydantic-settings", specifier = ">=2.12.0" },
+    { name = "pyyaml", specifier = ">=6.0.2" },
+    { name = "requests", specifier = ">=2.32.3" },
     { name = "sqlalchemy", specifier = ">=2.0.44" },
 ]
 
@@ -938,6 +948,20 @@ wheels = [
 ]
 
 [[package]]
+name = "llama-index-embeddings-ollama"
+version = "0.8.4"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "llama-index-core" },
+    { name = "ollama" },
+    { name = "pytest-asyncio" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/90/28/31a359840cab68eaf928b72204d4f3d931b4e6c9b5ada939eec1a28c0df8/llama_index_embeddings_ollama-0.8.4.tar.gz", hash = "sha256:6da860943108d775b4e1914508d0f656786dd0170a6a453e097ee2b8c29feb20", size = 4079, upload-time = "2025-11-10T20:00:46.157Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/96/1f/3d137c07f5cdb4c155f07ebe01da7099cce950e3ae0012265e715dd1b44a/llama_index_embeddings_ollama-0.8.4-py3-none-any.whl", hash = "sha256:0bf7de40048c8659c45ea3ee1ad8584941628c94743ffb41d3cc839cdd46bf5c", size = 3653, upload-time = "2025-11-10T20:00:45.403Z" },
+]
+
+[[package]]
 name = "llama-index-embeddings-openai"
 version = "0.5.1"
 source = { registry = "https://pypi.org/simple" }
@@ -975,6 +999,19 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/af/b9/a7a74de6d8aacf4be329329495983d78d96b1a6e69b6d9fcf4a233febd4b/llama_index_instrumentation-0.4.2.tar.gz", hash = "sha256:dc4957b64da0922060690e85a6be9698ac08e34e0f69e90b01364ddec4f3de7f", size = 46146, upload-time = "2025-10-13T20:44:48.85Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/40/54/df8063b0441242e250e03d1e31ebde5dffbe24e1af32b025cb1a4544150c/llama_index_instrumentation-0.4.2-py3-none-any.whl", hash = "sha256:b4989500e6454059ab3f3c4a193575d47ab1fadb730c2e8f2b962649ae88b70b", size = 15411, upload-time = "2025-10-13T20:44:47.685Z" },
+]
+
+[[package]]
+name = "llama-index-llms-ollama"
+version = "0.9.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "llama-index-core" },
+    { name = "ollama" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/05/10/8be8a0f057ea2834c92b6f5db72317b36d007f8dfae14c485921934b30c0/llama_index_llms_ollama-0.9.0.tar.gz", hash = "sha256:cdfa167f7ea8074fbfd50b3e80153d6d05fa3b4e72e530b18dc54f77518503d1", size = 8986, upload-time = "2025-10-27T15:52:47.717Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/50/6d/068dd19afbce84af2706a6ba12bb1c7c19f06c75ee00b2ce3d4418cd9c71/llama_index_llms_ollama-0.9.0-py3-none-any.whl", hash = "sha256:af1799ac7d3a7fee72256c2533b20f786119703108ccb2678d877cf918945173", size = 8640, upload-time = "2025-10-27T15:52:46.586Z" },
 ]
 
 [[package]]
@@ -1372,6 +1409,19 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/51/41/851c4b4082402d9ea860c3626db5d5df47164a712cb23b54be028b184c1c/numpy-2.3.5-cp314-cp314t-win32.whl", hash = "sha256:93eebbcf1aafdf7e2ddd44c2923e2672e1010bddc014138b229e49725b4d6be5", size = 6479806, upload-time = "2025-11-16T22:52:14.641Z" },
     { url = "https://files.pythonhosted.org/packages/90/30/d48bde1dfd93332fa557cff1972fbc039e055a52021fbef4c2c4b1eefd17/numpy-2.3.5-cp314-cp314t-win_amd64.whl", hash = "sha256:c8a9958e88b65c3b27e22ca2a076311636850b612d6bbfb76e8d156aacde2aaf", size = 13105760, upload-time = "2025-11-16T22:52:17.975Z" },
     { url = "https://files.pythonhosted.org/packages/2d/fd/4b5eb0b3e888d86aee4d198c23acec7d214baaf17ea93c1adec94c9518b9/numpy-2.3.5-cp314-cp314t-win_arm64.whl", hash = "sha256:6203fdf9f3dc5bdaed7319ad8698e685c7a3be10819f41d32a0723e611733b42", size = 10545459, upload-time = "2025-11-16T22:52:20.55Z" },
+]
+
+[[package]]
+name = "ollama"
+version = "0.6.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "httpx" },
+    { name = "pydantic" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/9d/5a/652dac4b7affc2b37b95386f8ae78f22808af09d720689e3d7a86b6ed98e/ollama-0.6.1.tar.gz", hash = "sha256:478c67546836430034b415ed64fa890fd3d1ff91781a9d548b3325274e69d7c6", size = 51620, upload-time = "2025-11-13T23:02:17.416Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/47/4f/4a617ee93d8208d2bcf26b2d8b9402ceaed03e3853c754940e2290fed063/ollama-0.6.1-py3-none-any.whl", hash = "sha256:fc4c984b345735c5486faeee67d8a265214a31cbb828167782dc642ce0a2bf8c", size = 14354, upload-time = "2025-11-13T23:02:16.292Z" },
 ]
 
 [[package]]
