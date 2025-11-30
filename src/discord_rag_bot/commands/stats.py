@@ -6,6 +6,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 from sqlalchemy import func, select, MetaData, Table
+from sqlalchemy.dialects.postgresql import JSONB
 from rag_core.orm.session import create_engine_from_db
 
 from ..config import settings
@@ -56,8 +57,9 @@ class StatsCog(commands.Cog):
                     total_chars = int(conn.execute(select(func.sum(func.octet_length(tbl.c.text)))).scalar() or 0)
 
                     # Distinct docs: COALESCE(jsonb_extract_path_text(metadata_, 'parent_id'), ... , node_id)
-                    parent = func.jsonb_extract_path_text(tbl.c.metadata_, "parent_id")
-                    refdoc = func.jsonb_extract_path_text(tbl.c.metadata_, "ref_doc_id")
+                    metadata_col = func.cast(tbl.c.metadata_, JSONB)
+                    parent = func.jsonb_extract_path_text(metadata_col, "parent_id")
+                    refdoc = func.jsonb_extract_path_text(metadata_col, "ref_doc_id")
                     doc_expr = func.coalesce(parent, refdoc, tbl.c.node_id)
                     distinct_docs = int(conn.execute(select(func.count(func.distinct(doc_expr)))).scalar() or 0)
         except Exception as e:
