@@ -48,7 +48,7 @@ class EstimateCog(commands.Cog):
             return False
         return app_commands.check(predicate)
 
-    async def _estimate_for_source(self, source) -> tuple[int, int, float]:
+    def _estimate_for_source(self, source) -> tuple[int, int, float]:
         # returns (chunks, total_chars, seconds_estimate)
         ex_tps = float(getattr(settings, "estimate_tokens_per_sec", 2500.0))
         ex_wps = float(getattr(settings, "estimate_db_writes_per_sec", 200.0))
@@ -137,4 +137,3 @@ async def setup(bot: commands.Bot):
         bot.tree.add_command(EstimateCog.group)
     except Exception:
         pass
-
