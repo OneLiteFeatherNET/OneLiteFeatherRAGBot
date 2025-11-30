@@ -9,7 +9,6 @@ from discord.ext import commands
 from ..util.text import clip_discord_message
 from rag_core import RagResult
 from ..infrastructure.config_store import load_prompt_effective
-from ..infrastructure.memory import save_message, load_slice, update_summary_with_ai
 from ..infrastructure.gating import should_use_rag
 from ..infrastructure.language import get_language_hint
 from rag_core.metrics import discord_messages_processed_total, rag_queries_total
@@ -102,8 +101,8 @@ class ChatListenerCog(commands.Cog):
 
         def run_query() -> tuple[str, list[str]]:
             base_prompt = load_prompt_effective(message.guild.id if message.guild else None, message.channel.id)
-            # Load user memory slice (summary + recent channel messages)
-            mem = load_slice(user_id=message.author.id, channel_id=message.channel.id)
+            # Load user memory via service (summary + recent channel messages)
+            mem = self.bot.services.memory.get_context(user_id=message.author.id, channel_id=message.channel.id)  # type: ignore[attr-defined]
             prompt = _style_prompt(base_prompt, mem.summary, mem.recent)
             lang_hint = get_language_hint(question)
             if lang_hint:
@@ -148,11 +147,10 @@ class ChatListenerCog(commands.Cog):
         placeholder_msg = await message.reply("🧠 Einen kleinen Moment – ich suche passende Informationen und schreibe die Antwort …")
         # Save the incoming user message into memory (best-effort)
         try:
-            save_message(
+            self.bot.services.memory.record_user_message(  # type: ignore[attr-defined]
                 user_id=message.author.id,
                 guild_id=message.guild.id if message.guild else None,
                 channel_id=message.channel.id if hasattr(message.channel, "id") else None,
-                role="user",
                 content=message.content or "",
             )
         except Exception:
@@ -174,11 +172,10 @@ class ChatListenerCog(commands.Cog):
             await message.reply(clip_discord_message(text))
         # Save bot answer and update summary in background (best-effort)
         try:
-            save_message(
+            self.bot.services.memory.record_assistant_message(  # type: ignore[attr-defined]
                 user_id=message.author.id,
                 guild_id=message.guild.id if message.guild else None,
                 channel_id=message.channel.id if hasattr(message.channel, "id") else None,
-                role="assistant",
                 content=text,
             )
         except Exception:
@@ -186,22 +183,12 @@ class ChatListenerCog(commands.Cog):
         # Summarize/update user memory asynchronously
         async def _update_summary_bg():
             try:
-                mem_now = load_slice(user_id=message.author.id, channel_id=message.channel.id)
-                updated = update_summary_with_ai(
-                    current_summary=mem_now.summary,
+                self.bot.services.memory.update_summary(  # type: ignore[attr-defined]
+                    user_id=message.author.id,
                     user_text=message.content or "",
                     bot_answer=text,
                     answer_llm=lambda q, system_prompt: self.bot.services.rag.answer_llm(q, system_prompt=system_prompt),  # type: ignore[attr-defined]
                 )
-                if updated and updated.strip():
-                    save_message(
-                        user_id=message.author.id,
-                        guild_id=message.guild.id if message.guild else None,
-                        channel_id=None,
-                        role="summary",
-                        content=updated.strip(),
-                        kind="summary",
-                    )
             except Exception:
                 pass
 
