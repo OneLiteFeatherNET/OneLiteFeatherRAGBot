@@ -98,4 +98,10 @@ class ConfigCog(commands.Cog):
 
 
 async def setup(bot: commands.Bot):
-    await bot.add_cog(ConfigCog(bot))
+    cog = ConfigCog(bot)
+    await bot.add_cog(cog)
+    # Ensure the grouped commands are registered
+    try:
+        bot.tree.add_command(ConfigCog.group)
+    except Exception:
+        pass
